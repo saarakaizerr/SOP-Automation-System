@@ -151,7 +151,7 @@ export function SOPCard({ sop }: Props) {
 
   const pipelineIdx = PIPELINE_STAGES.indexOf(sop.pipeline_status ?? '')
   const pipelinePct = pipelineIdx < 0 ? 5 : Math.round(((pipelineIdx + 1) / PIPELINE_STAGES.length) * 100)
-  const ringCirc = 2 * Math.PI * 22
+  const ringCirc = 2 * Math.PI * 21
   const ringOffset = ringCirc * (1 - pipelinePct / 100)
 
   const cleanTitle = sop.title.replace(/\b\d{8}\s+\d{6}\b/g, '').replace(/\s{2,}/g, ' ').trim()
@@ -210,16 +210,22 @@ export function SOPCard({ sop }: Props) {
       <div className={clsx('px-5 pt-4 pb-4 flex items-start gap-3', cfg.heroBg)}>
         {isPipelineRunning ? (
           <div className="relative shrink-0 w-12 h-12 mt-0.5">
-            <svg className="absolute inset-0 w-12 h-12 -rotate-90" viewBox="0 0 48 48">
-              <circle cx="24" cy="24" r="22" fill="none" strokeWidth="3" stroke="rgba(139,92,246,0.2)" />
+            <svg className="absolute inset-0 w-12 h-12 -rotate-90" viewBox="0 0 48 48" style={{ filter: 'drop-shadow(0 0 5px rgba(139,92,246,0.5))' }}>
+              <circle cx="24" cy="24" r="21" fill="none" strokeWidth="4" stroke="rgba(139,92,246,0.15)" />
               <circle
-                cx="24" cy="24" r="22"
-                fill="none" strokeWidth="3" stroke="#8b5cf6"
+                cx="24" cy="24" r="21"
+                fill="none" strokeWidth="4" stroke="url(#ring-grad)"
                 strokeDasharray={ringCirc}
                 strokeDashoffset={ringOffset}
                 strokeLinecap="round"
                 style={{ transition: 'stroke-dashoffset 0.7s ease' }}
               />
+              <defs>
+                <linearGradient id="ring-grad" x1="0%" y1="0%" x2="100%" y2="0%">
+                  <stop offset="0%" stopColor="#8b5cf6" />
+                  <stop offset="100%" stopColor="#6366f1" />
+                </linearGradient>
+              </defs>
             </svg>
             <div className={clsx(
               'absolute top-1 left-1 w-10 h-10 rounded-full flex items-center justify-center',

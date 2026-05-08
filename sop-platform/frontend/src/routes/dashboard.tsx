@@ -35,7 +35,7 @@ function useCountUp(target: number, duration = 500) {
   return count
 }
 
-// ── Stat card ────────────────────────────────────────────────
+// ── Stat / filter card ────────────────────────────────────────
 interface StatCardProps {
   label: string
   value: number
@@ -43,32 +43,43 @@ interface StatCardProps {
   accent: string
   iconBg: string
   active: boolean
+  dot?: string
   onClick: () => void
 }
 
-function StatCard({ label, value, icon, accent, iconBg, active, onClick }: StatCardProps) {
+function StatCard({ label, value, icon, accent, iconBg, active, dot, onClick }: StatCardProps) {
   const displayed = useCountUp(value)
   return (
     <button
       onClick={onClick}
+      title={`Filter by ${label}`}
       className={clsx(
         'group flex items-center gap-3 px-4 py-3.5 rounded-2xl border text-left',
-        'transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg',
+        'transition-all duration-200 hover:-translate-y-1 hover:shadow-xl',
         active
-          ? `${accent} border-transparent shadow-md`
-          : 'bg-card border-subtle hover:border-default',
+          ? `${accent} border-transparent shadow-lg scale-[1.02]`
+          : 'bg-card border-subtle hover:border-default hover:shadow-md',
       )}
     >
       <div className={clsx(
-        'w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-transform duration-200 group-hover:scale-110',
+        'w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-all duration-200 group-hover:scale-110',
         active ? 'bg-white/20' : iconBg,
       )}>
-        {icon}
+        {dot
+          ? <span className={clsx('w-3 h-3 rounded-full', active ? 'bg-white/80' : dot)} />
+          : icon
+        }
       </div>
-      <div>
+      <div className="flex-1 min-w-0">
         <p className={clsx('text-2xl font-bold tabular-nums leading-none', active ? 'text-white' : 'text-default')}>{displayed}</p>
-        <p className={clsx('text-xs mt-1', active ? 'text-white/70' : 'text-muted')}>{label}</p>
+        <p className={clsx('text-xs mt-1 font-medium', active ? 'text-white/70' : 'text-muted')}>{label}</p>
       </div>
+      <svg
+        className={clsx('w-3.5 h-3.5 opacity-0 group-hover:opacity-60 transition-opacity shrink-0', active ? 'text-white' : 'text-muted')}
+        fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+      >
+        <path strokeLinecap="round" strokeLinejoin="round" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L13 13.414V19a1 1 0 01-.553.894l-4 2A1 1 0 017 21v-7.586L3.293 6.707A1 1 0 013 6V4z" />
+      </svg>
     </button>
   )
 }
@@ -247,9 +258,9 @@ function Dashboard() {
     return () => window.removeEventListener('keydown', onKey)
   }, [focused])
 
-  if (isLoading) return <PageLoader label="Loading recordings…" />
-  if (error) return <PageError message={`Failed to load recordings: ${(error as Error).message}`} />
-  if (!sops || sops.length === 0) return <PageError message="No recordings found." />
+  if (isLoading) return <PageLoader label="Loading SOPs…" />
+  if (error) return <PageError message={`Failed to load SOPs: ${(error as Error).message}`} />
+  if (!sops || sops.length === 0) return <PageError message="No SOPs found." />
 
   const recordings = sops.filter(s => !s.is_merged)
   const allTags = Array.from(new Set(recordings.flatMap(s => (s.tags || []).map(t => t.name)))).sort()
@@ -340,12 +351,9 @@ function Dashboard() {
           active={statusFilter === 'processing'}
           accent="bg-gradient-to-br from-violet-600 to-indigo-600"
           iconBg="bg-violet-500/10"
+          dot="bg-violet-400 animate-pulse"
           onClick={() => toggleStatus('processing')}
-          icon={
-            <svg className="w-4.5 h-4.5 text-violet-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-            </svg>
-          }
+          icon={<></>}
         />
         <StatCard
           label="Draft"
@@ -353,12 +361,9 @@ function Dashboard() {
           active={statusFilter === 'draft'}
           accent="bg-gradient-to-br from-slate-500 to-slate-600"
           iconBg="bg-slate-500/10"
+          dot="bg-slate-400"
           onClick={() => toggleStatus('draft')}
-          icon={
-            <svg className="w-4.5 h-4.5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-            </svg>
-          }
+          icon={<></>}
         />
         <StatCard
           label="Published"
@@ -366,28 +371,58 @@ function Dashboard() {
           active={statusFilter === 'published'}
           accent="bg-gradient-to-br from-emerald-600 to-teal-600"
           iconBg="bg-emerald-500/10"
+          dot="bg-emerald-400"
           onClick={() => toggleStatus('published')}
-          icon={
-            <svg className="w-4.5 h-4.5 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-          }
+          icon={<></>}
         />
       </div>
+
+      {/* Active filter chips */}
+      {isFiltering && (
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-xs text-muted font-medium">Showing:</span>
+          {statusFilter && (
+            <span className={clsx(
+              'inline-flex items-center gap-1.5 text-xs px-3 py-1 rounded-full border font-medium',
+              statusFilter === 'processing' ? 'bg-violet-500/15 text-violet-400 border-violet-500/25' :
+              statusFilter === 'published'  ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/25' :
+              statusFilter === 'draft'      ? 'bg-slate-500/15 text-slate-400 border-slate-500/25' :
+              'bg-blue-500/15 text-blue-400 border-blue-500/25'
+            )}>
+              <span className="w-1.5 h-1.5 rounded-full bg-current shrink-0" />
+              {statusFilter.charAt(0).toUpperCase() + statusFilter.slice(1)}
+              <button onClick={() => toggleStatus(statusFilter)} className="ml-0.5 opacity-60 hover:opacity-100 transition-opacity">×</button>
+            </span>
+          )}
+          {selectedTags.map(tag => (
+            <span key={tag} className="inline-flex items-center gap-1.5 text-xs px-3 py-1 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20 font-medium">
+              {tag}
+              <button onClick={() => toggleTag(tag)} className="ml-0.5 opacity-60 hover:opacity-100 transition-opacity">×</button>
+            </span>
+          ))}
+          {search && (
+            <span className="inline-flex items-center gap-1.5 text-xs px-3 py-1 rounded-full bg-raised text-secondary border border-default font-medium">
+              "{search}"
+              <button onClick={() => handleSearch('')} className="ml-0.5 opacity-60 hover:opacity-100 transition-opacity">×</button>
+            </span>
+          )}
+          <button onClick={clearAll} className="text-xs text-muted hover:text-red-400 transition-colors ml-1">Clear all</button>
+        </div>
+      )}
 
       {/* Search + filter panel */}
       <div className={clsx(
         'rounded-2xl border bg-card shadow-sm transition-all duration-200',
-        focused ? 'border-blue-500 shadow-blue-500/10 shadow-lg' : 'border-subtle',
+        focused ? 'border-violet-500 shadow-violet-500/10 shadow-lg' : 'border-subtle',
       )}>
-        <div className="flex items-center px-4 py-3 gap-3">
-          <svg className={clsx('w-4 h-4 shrink-0 transition-colors duration-200', focused ? 'text-blue-500' : 'text-muted')} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <div className="flex items-center px-5 py-3.5 gap-3">
+          <svg className={clsx('w-4.5 h-4.5 shrink-0 transition-colors duration-200', focused ? 'text-violet-400' : 'text-muted')} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
           </svg>
           <input
             ref={inputRef}
             type="text"
-            placeholder={`Search ${recordings.length} recording${recordings.length !== 1 ? 's' : ''}…`}
+            placeholder={`Search ${recordings.length} SOPs…`}
             value={search}
             onChange={(e) => handleSearch(e.target.value)}
             onFocus={() => setFocused(true)}
@@ -451,7 +486,7 @@ function Dashboard() {
               <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
           </div>
-          <p className="text-sm font-semibold text-secondary mb-1">No recordings found</p>
+          <p className="text-sm font-semibold text-secondary mb-1">No SOPs found</p>
           <p className="text-xs text-muted mb-4">Try different keywords or remove some filters</p>
           <button onClick={clearAll} className="text-xs font-medium text-blue-500 hover:text-blue-400 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 px-4 py-2 rounded-xl transition-all">
             Clear all filters
@@ -464,7 +499,7 @@ function Dashboard() {
             <p className="text-xs text-muted">
               {isFiltering
                 ? `${sorted.length} result${sorted.length !== 1 ? 's' : ''}`
-                : `${recordings.length} recording${recordings.length !== 1 ? 's' : ''}`
+                : `${recordings.length} SOP${recordings.length !== 1 ? 's' : ''}`
               }
             </p>
             <div className="flex items-center gap-2">
