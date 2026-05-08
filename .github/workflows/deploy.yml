@@ -130,8 +130,28 @@ jobs:
             --image ${{ env.ACR_LOGIN_SERVER }}/sop-extractor:${{ needs.build-push.outputs.image-tag }}
 
       - name: Health check sop-api
+        id: health_check
+        continue-on-error: true
         run: |
           echo "Waiting 30s for new revision to start..."
           sleep 30
           curl --retry 12 --retry-delay 15 --retry-connrefused --fail \
             https://soptest.cloudnavision.com/health
+
+      - name: Dump sop-api logs (on health check failure)
+        if: steps.health_check.outcome == 'failure'
+        run: |
+          echo "::error::Health check failed — dumping sop-api diagnostics"
+          echo "=== Revision list ==="
+          az containerapp revision list \
+            --name sop-api --resource-group ${{ env.RESOURCE_GROUP }} \
+            --output table || true
+          echo "=== sop-api container logs ==="
+          az containerapp logs show \
+            --name sop-api --resource-group ${{ env.RESOURCE_GROUP }} \
+            --container sop-api --tail 100 || true
+          echo "=== cloudflared sidecar logs ==="
+          az containerapp logs show \
+            --name sop-api --resource-group ${{ env.RESOURCE_GROUP }} \
+            --container cloudflared --tail 30 || true
+          exit 1
