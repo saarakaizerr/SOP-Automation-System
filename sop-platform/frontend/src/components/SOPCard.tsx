@@ -37,6 +37,7 @@ function nextColor(current: string) {
 const statusConfig: Record<SOPStatus, {
   label: string
   heroBg: string
+  strip: string
   badge: string
   dot: string
   hoverShadow: string
@@ -44,15 +45,17 @@ const statusConfig: Record<SOPStatus, {
 }> = {
   processing: {
     label: 'Processing',
-    heroBg: 'bg-gradient-to-br from-violet-500/8 to-indigo-500/4',
-    badge: 'bg-violet-500/10 text-violet-400 border-violet-500/20',
+    heroBg: 'bg-gradient-to-br from-violet-500/20 to-indigo-500/10',
+    strip: 'bg-gradient-to-r from-violet-500 to-indigo-500',
+    badge: 'bg-violet-500/15 text-violet-400 border-violet-500/25',
     dot: 'bg-violet-400 animate-pulse',
-    hoverShadow: 'hover:shadow-violet-500/10',
-    hoverBorder: 'hover:border-violet-500/30',
+    hoverShadow: 'hover:shadow-violet-500/15',
+    hoverBorder: 'hover:border-violet-500/40',
   },
   draft: {
     label: 'Draft',
-    heroBg: 'bg-gradient-to-br from-slate-500/6 to-slate-600/3',
+    heroBg: 'bg-gradient-to-br from-slate-500/12 to-slate-600/6',
+    strip: 'bg-gradient-to-r from-slate-400 to-slate-500',
     badge: 'bg-raised text-muted border-default',
     dot: 'bg-slate-400',
     hoverShadow: 'hover:shadow-slate-400/10',
@@ -60,23 +63,26 @@ const statusConfig: Record<SOPStatus, {
   },
   in_review: {
     label: 'In Review',
-    heroBg: 'bg-gradient-to-br from-blue-500/8 to-cyan-500/4',
-    badge: 'bg-blue-500/10 text-blue-400 border-blue-500/20',
+    heroBg: 'bg-gradient-to-br from-blue-500/20 to-cyan-500/10',
+    strip: 'bg-gradient-to-r from-blue-500 to-cyan-400',
+    badge: 'bg-blue-500/15 text-blue-400 border-blue-500/25',
     dot: 'bg-blue-400',
-    hoverShadow: 'hover:shadow-blue-500/10',
-    hoverBorder: 'hover:border-blue-500/30',
+    hoverShadow: 'hover:shadow-blue-500/15',
+    hoverBorder: 'hover:border-blue-500/40',
   },
   published: {
     label: 'Published',
-    heroBg: 'bg-gradient-to-br from-emerald-500/8 to-teal-500/4',
-    badge: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
+    heroBg: 'bg-gradient-to-br from-emerald-500/20 to-teal-500/10',
+    strip: 'bg-gradient-to-r from-emerald-500 to-teal-400',
+    badge: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/25',
     dot: 'bg-emerald-400',
-    hoverShadow: 'hover:shadow-emerald-500/10',
-    hoverBorder: 'hover:border-emerald-500/30',
+    hoverShadow: 'hover:shadow-emerald-500/15',
+    hoverBorder: 'hover:border-emerald-500/40',
   },
   archived: {
     label: 'Archived',
-    heroBg: 'bg-gradient-to-br from-gray-500/6 to-gray-600/3',
+    heroBg: 'bg-gradient-to-br from-gray-500/10 to-gray-600/5',
+    strip: 'bg-gradient-to-r from-gray-400 to-gray-500',
     badge: 'bg-raised text-muted border-default',
     dot: 'bg-gray-400',
     hoverShadow: 'hover:shadow-gray-400/10',
@@ -233,8 +239,11 @@ export function SOPCard({ sop }: Props) {
         cfg.hoverBorder, cfg.hoverShadow,
       )}
     >
+      {/* ── Status accent strip ────────────────────────────────── */}
+      <div className={clsx('h-1 w-full shrink-0', cfg.strip)} />
+
       {/* ── Hero header ────────────────────────────────────────── */}
-      <div className={clsx('px-5 pt-5 pb-4', cfg.heroBg)}>
+      <div className={clsx('px-5 pt-4 pb-4', cfg.heroBg)}>
         {/* Avatar row */}
         <div className="flex items-start justify-between gap-3 mb-3">
           <div className={clsx(

@@ -41,29 +41,33 @@ interface StatCardProps {
   value: number
   icon: React.ReactNode
   accent: string
+  iconBg: string
   active: boolean
   onClick: () => void
 }
 
-function StatCard({ label, value, icon, accent, active, onClick }: StatCardProps) {
+function StatCard({ label, value, icon, accent, iconBg, active, onClick }: StatCardProps) {
   const displayed = useCountUp(value)
   return (
     <button
       onClick={onClick}
       className={clsx(
-        'group flex items-center gap-3 px-4 py-3 rounded-2xl border text-left',
+        'group flex items-center gap-3 px-4 py-3.5 rounded-2xl border text-left',
         'transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg',
         active
           ? `${accent} border-transparent shadow-md`
           : 'bg-card border-subtle hover:border-default',
       )}
     >
-      <div className={clsx('w-9 h-9 rounded-xl flex items-center justify-center shrink-0 transition-transform duration-200 group-hover:scale-110', active ? 'bg-white/20' : 'bg-raised')}>
+      <div className={clsx(
+        'w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-transform duration-200 group-hover:scale-110',
+        active ? 'bg-white/20' : iconBg,
+      )}>
         {icon}
       </div>
       <div>
-        <p className={clsx('text-xl font-bold tabular-nums leading-none', active ? 'text-white' : 'text-default')}>{displayed}</p>
-        <p className={clsx('text-xs mt-0.5', active ? 'text-white/70' : 'text-muted')}>{label}</p>
+        <p className={clsx('text-2xl font-bold tabular-nums leading-none', active ? 'text-white' : 'text-default')}>{displayed}</p>
+        <p className={clsx('text-xs mt-1', active ? 'text-white/70' : 'text-muted')}>{label}</p>
       </div>
     </button>
   )
@@ -322,9 +326,10 @@ function Dashboard() {
           value={stats.total}
           active={statusFilter === null && !isFiltering}
           accent="bg-gradient-to-br from-slate-600 to-slate-700"
+          iconBg="bg-raised"
           onClick={clearAll}
           icon={
-            <svg className="w-4 h-4 text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <svg className="w-4.5 h-4.5 text-secondary" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
             </svg>
           }
@@ -334,9 +339,10 @@ function Dashboard() {
           value={stats.processing}
           active={statusFilter === 'processing'}
           accent="bg-gradient-to-br from-violet-600 to-indigo-600"
+          iconBg="bg-violet-500/10"
           onClick={() => toggleStatus('processing')}
           icon={
-            <svg className="w-4 h-4 text-violet-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <svg className="w-4.5 h-4.5 text-violet-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
             </svg>
           }
@@ -346,9 +352,10 @@ function Dashboard() {
           value={stats.draft}
           active={statusFilter === 'draft'}
           accent="bg-gradient-to-br from-slate-500 to-slate-600"
+          iconBg="bg-slate-500/10"
           onClick={() => toggleStatus('draft')}
           icon={
-            <svg className="w-4 h-4 text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <svg className="w-4.5 h-4.5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
             </svg>
           }
@@ -358,9 +365,10 @@ function Dashboard() {
           value={stats.published}
           active={statusFilter === 'published'}
           accent="bg-gradient-to-br from-emerald-600 to-teal-600"
+          iconBg="bg-emerald-500/10"
           onClick={() => toggleStatus('published')}
           icon={
-            <svg className="w-4 h-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <svg className="w-4.5 h-4.5 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
           }
