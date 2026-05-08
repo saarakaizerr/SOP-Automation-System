@@ -43,11 +43,10 @@ interface StatCardProps {
   accent: string
   iconBg: string
   active: boolean
-  dot?: string
   onClick: () => void
 }
 
-function StatCard({ label, value, icon, accent, iconBg, active, dot, onClick }: StatCardProps) {
+function StatCard({ label, value, icon, accent, iconBg, active, onClick }: StatCardProps) {
   const displayed = useCountUp(value)
   return (
     <button
@@ -62,24 +61,15 @@ function StatCard({ label, value, icon, accent, iconBg, active, dot, onClick }: 
       )}
     >
       <div className={clsx(
-        'w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-all duration-200 group-hover:scale-110',
+        'w-11 h-11 rounded-xl flex items-center justify-center shrink-0 transition-all duration-200 group-hover:scale-110',
         active ? 'bg-white/20' : iconBg,
       )}>
-        {dot
-          ? <span className={clsx('w-3 h-3 rounded-full', active ? 'bg-white/80' : dot)} />
-          : icon
-        }
+        {icon}
       </div>
       <div className="flex-1 min-w-0">
         <p className={clsx('text-2xl font-bold tabular-nums leading-none', active ? 'text-white' : 'text-default')}>{displayed}</p>
         <p className={clsx('text-xs mt-1 font-medium', active ? 'text-white/70' : 'text-muted')}>{label}</p>
       </div>
-      <svg
-        className={clsx('w-3.5 h-3.5 opacity-0 group-hover:opacity-60 transition-opacity shrink-0', active ? 'text-white' : 'text-muted')}
-        fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
-      >
-        <path strokeLinecap="round" strokeLinejoin="round" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L13 13.414V19a1 1 0 01-.553.894l-4 2A1 1 0 017 21v-7.586L3.293 6.707A1 1 0 013 6V4z" />
-      </svg>
     </button>
   )
 }
@@ -140,11 +130,11 @@ function SortDropdown({ value, onChange }: { value: SortKey; onChange: (k: SortK
 
 // ── List row ─────────────────────────────────────────────────
 const statusBadge: Record<SOPStatus, { label: string; cls: string; dot: string }> = {
-  processing: { label: 'Processing', cls: 'bg-violet-500/10 text-violet-400 border-violet-500/20', dot: 'bg-violet-400 animate-pulse' },
-  draft:      { label: 'Draft',      cls: 'bg-raised text-muted border-default',                  dot: 'bg-slate-400' },
-  in_review:  { label: 'In Review',  cls: 'bg-blue-500/10 text-blue-400 border-blue-500/20',      dot: 'bg-blue-400' },
-  published:  { label: 'Published',  cls: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20', dot: 'bg-emerald-400' },
-  archived:   { label: 'Archived',   cls: 'bg-raised text-muted border-default',                  dot: 'bg-gray-400' },
+  processing: { label: 'In Processing', cls: 'bg-violet-500/10 text-violet-400 border-violet-500/20', dot: 'bg-violet-400 animate-pulse' },
+  draft:      { label: 'Draft',         cls: 'bg-amber-500/10 text-amber-400 border-amber-500/20',    dot: 'bg-amber-400' },
+  in_review:  { label: 'In Review',     cls: 'bg-blue-500/10 text-blue-400 border-blue-500/20',       dot: 'bg-blue-400' },
+  published:  { label: 'Published',     cls: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20', dot: 'bg-emerald-400' },
+  archived:   { label: 'Archived',      cls: 'bg-raised text-muted border-default',                   dot: 'bg-gray-400' },
 }
 
 const avatarGradient: Record<SOPStatus, string> = {
@@ -333,96 +323,73 @@ function Dashboard() {
       {/* Stats bar */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <StatCard
-          label="Total"
+          label="Total SOPs"
           value={stats.total}
           active={statusFilter === null && !isFiltering}
-          accent="bg-gradient-to-br from-slate-600 to-slate-700"
-          iconBg="bg-raised"
+          accent="bg-gradient-to-br from-blue-600 to-blue-700"
+          iconBg="bg-blue-500/15"
           onClick={clearAll}
           icon={
-            <svg className="w-4 h-4 text-secondary" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+            <svg className="w-5 h-5 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 6.878V6a2.25 2.25 0 012.25-2.25h7.5A2.25 2.25 0 0118 6v.878m-12 0c.235-.083.487-.128.75-.128h10.5c.263 0 .515.045.75.128m-12 0A2.25 2.25 0 004.5 9v.878m13.5-3A2.25 2.25 0 0119.5 9v.878m0 0a2.246 2.246 0 00-.75-.128H5.25c-.263 0-.515.045-.75.128m15 0A2.25 2.25 0 0121 12v6a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 18v-6c0-.98.626-1.813 1.5-2.122" />
             </svg>
           }
         />
         <StatCard
-          label="Processing"
+          label="In Processing"
           value={stats.processing}
           active={statusFilter === 'processing'}
           accent="bg-gradient-to-br from-violet-600 to-indigo-600"
-          iconBg="bg-violet-500/10"
-          dot="bg-violet-400 animate-pulse"
+          iconBg="bg-violet-500/15"
           onClick={() => toggleStatus('processing')}
-          icon={<></>}
+          icon={
+            <div className={clsx(
+              'w-5 h-5 rounded-full border-[3px] animate-spin',
+              statusFilter === 'processing' ? 'border-white/20 border-t-white' : 'border-violet-400/25 border-t-violet-400',
+            )} />
+          }
         />
         <StatCard
           label="Draft"
           value={stats.draft}
           active={statusFilter === 'draft'}
-          accent="bg-gradient-to-br from-slate-500 to-slate-600"
-          iconBg="bg-slate-500/10"
-          dot="bg-slate-400"
+          accent="bg-gradient-to-br from-amber-600 to-orange-600"
+          iconBg="bg-amber-500/15"
           onClick={() => toggleStatus('draft')}
-          icon={<></>}
+          icon={
+            <svg className="w-5 h-5 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+            </svg>
+          }
         />
         <StatCard
           label="Published"
           value={stats.published}
           active={statusFilter === 'published'}
           accent="bg-gradient-to-br from-emerald-600 to-teal-600"
-          iconBg="bg-emerald-500/10"
-          dot="bg-emerald-400"
+          iconBg="bg-emerald-500/15"
           onClick={() => toggleStatus('published')}
-          icon={<></>}
+          icon={
+            <svg className="w-5 h-5 text-emerald-400" fill="currentColor" viewBox="0 0 24 24">
+              <path fillRule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12zm13.36-1.814a.75.75 0 10-1.22-.872l-3.236 4.53L9.53 12.22a.75.75 0 00-1.06 1.06l2.25 2.25a.75.75 0 001.14-.094l3.75-5.25z" clipRule="evenodd" />
+            </svg>
+          }
         />
       </div>
 
-      {/* Active filter chips */}
-      {isFiltering && (
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-xs text-muted font-medium">Showing:</span>
-          {statusFilter && (
-            <span className={clsx(
-              'inline-flex items-center gap-1.5 text-xs px-3 py-1 rounded-full border font-medium',
-              statusFilter === 'processing' ? 'bg-violet-500/15 text-violet-400 border-violet-500/25' :
-              statusFilter === 'published'  ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/25' :
-              statusFilter === 'draft'      ? 'bg-slate-500/15 text-slate-400 border-slate-500/25' :
-              'bg-blue-500/15 text-blue-400 border-blue-500/25'
-            )}>
-              <span className="w-1.5 h-1.5 rounded-full bg-current shrink-0" />
-              {statusFilter.charAt(0).toUpperCase() + statusFilter.slice(1)}
-              <button onClick={() => toggleStatus(statusFilter)} className="ml-0.5 opacity-60 hover:opacity-100 transition-opacity">×</button>
-            </span>
-          )}
-          {selectedTags.map(tag => (
-            <span key={tag} className="inline-flex items-center gap-1.5 text-xs px-3 py-1 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20 font-medium">
-              {tag}
-              <button onClick={() => toggleTag(tag)} className="ml-0.5 opacity-60 hover:opacity-100 transition-opacity">×</button>
-            </span>
-          ))}
-          {search && (
-            <span className="inline-flex items-center gap-1.5 text-xs px-3 py-1 rounded-full bg-raised text-secondary border border-default font-medium">
-              "{search}"
-              <button onClick={() => handleSearch('')} className="ml-0.5 opacity-60 hover:opacity-100 transition-opacity">×</button>
-            </span>
-          )}
-          <button onClick={clearAll} className="text-xs text-muted hover:text-red-400 transition-colors ml-1">Clear all</button>
-        </div>
-      )}
-
-      {/* Search + filter panel */}
+      {/* Search bar */}
       <div className={clsx(
         'rounded-2xl border bg-card shadow-sm transition-all duration-200',
         focused ? 'border-violet-500 shadow-violet-500/10 shadow-lg' : 'border-subtle',
       )}>
-        <div className="flex items-center px-5 py-3.5 gap-3">
+        <div className="flex items-center px-4 py-3 gap-3">
           <svg className={clsx('w-4 h-4 shrink-0 transition-colors duration-200', focused ? 'text-violet-400' : 'text-muted')} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
           </svg>
           <input
             ref={inputRef}
             type="text"
-            placeholder={`Search ${recordings.length} SOPs…`}
+            placeholder="Search SOP name, tag, or status…"
             value={search}
             onChange={(e) => handleSearch(e.target.value)}
             onFocus={() => setFocused(true)}
@@ -430,19 +397,16 @@ function Dashboard() {
             className="flex-1 bg-transparent text-sm text-default placeholder:text-muted focus:outline-none"
           />
           <div className="flex items-center gap-2 shrink-0">
-            {isFiltering ? (
-              <>
-                <span className="text-xs text-muted tabular-nums">{filtered.length} / {recordings.length}</span>
-                <button
-                  onMouseDown={(e) => { e.preventDefault(); clearAll(); inputRef.current?.focus() }}
-                  className="flex items-center gap-1 text-xs text-muted hover:text-red-400 bg-raised hover:bg-red-500/10 border border-default hover:border-red-400/30 px-2 py-1 rounded-lg transition-all"
-                >
-                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                  Clear
-                </button>
-              </>
+            {search ? (
+              <button
+                onMouseDown={(e) => { e.preventDefault(); handleSearch(''); inputRef.current?.focus() }}
+                className="flex items-center gap-1 text-xs text-muted hover:text-red-400 bg-raised hover:bg-red-500/10 border border-default hover:border-red-400/30 px-2 py-1 rounded-lg transition-all"
+              >
+                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+                Clear
+              </button>
             ) : (
               <kbd className={clsx('hidden sm:flex items-center gap-0.5 text-[10px] font-medium text-muted bg-raised border border-subtle px-1.5 py-0.5 rounded-md select-none transition-opacity duration-200', focused ? 'opacity-0' : 'opacity-60')}>
                 {shortcutLabel}
@@ -450,10 +414,13 @@ function Dashboard() {
             )}
           </div>
         </div>
+      </div>
 
-        {allTags.length > 0 && (
-          <div className="flex flex-wrap items-center gap-1.5 px-4 pb-3 border-t border-subtle pt-2.5">
-            <span className="text-[11px] font-medium text-muted uppercase tracking-wide mr-1">Tags</span>
+      {/* Tags + sort + view row */}
+      {allTags.length > 0 && (
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-xs font-medium text-muted shrink-0">Tags:</span>
+          <div className="flex flex-wrap items-center gap-1.5 flex-1 min-w-0">
             {allTags.map(tag => {
               const active = selectedTags.includes(tag)
               return (
@@ -474,9 +441,31 @@ function Dashboard() {
                 </button>
               )
             })}
+            {isFiltering && (
+              <button onClick={clearAll} className="text-xs text-blue-400 hover:text-blue-300 transition-colors ml-1">
+                Clear filters
+              </button>
+            )}
           </div>
-        )}
-      </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <SortDropdown value={sortBy} onChange={(k) => { setSortBy(k); setPage(1) }} />
+            <div className="flex items-center bg-card border border-subtle rounded-lg overflow-hidden">
+              <button onClick={() => setView('grid')} title="Grid view"
+                className={clsx('p-1.5 transition-colors', view === 'grid' ? 'bg-blue-600 text-white' : 'text-muted hover:text-secondary hover:bg-raised')}>
+                <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
+                  <path d="M5 3a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2V5a2 2 0 00-2-2H5zm0 8a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2v-2a2 2 0 00-2-2H5zm6-6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V5zm0 8a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+                </svg>
+              </button>
+              <button onClick={() => setView('list')} title="List view"
+                className={clsx('p-1.5 transition-colors', view === 'list' ? 'bg-blue-600 text-white' : 'text-muted hover:text-secondary hover:bg-raised')}>
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Results */}
       {sorted.length === 0 ? (
@@ -494,42 +483,36 @@ function Dashboard() {
         </div>
       ) : (
         <>
-          {/* Controls row */}
-          <div className="flex items-center justify-between px-0.5">
-            <p className="text-xs text-muted">
-              {isFiltering
-                ? `${sorted.length} result${sorted.length !== 1 ? 's' : ''}`
-                : `${recordings.length} SOP${recordings.length !== 1 ? 's' : ''}`
-              }
-            </p>
-            <div className="flex items-center gap-2">
+          <p className="text-sm font-medium text-default">
+            {isFiltering
+              ? `${sorted.length} SOP${sorted.length !== 1 ? 's' : ''}`
+              : `${recordings.length} SOP${recordings.length !== 1 ? 's' : ''}`
+            }
+          </p>
+
+          {/* Show sort+view here if no tags (otherwise they're in the tags row) */}
+          {allTags.length === 0 && (
+            <div className="flex items-center justify-end gap-2 -mt-3">
               <SortDropdown value={sortBy} onChange={(k) => { setSortBy(k); setPage(1) }} />
-              {/* View toggle */}
               <div className="flex items-center bg-card border border-subtle rounded-lg overflow-hidden">
-                <button
-                  onClick={() => setView('grid')}
-                  title="Grid view"
-                  className={clsx('p-1.5 transition-colors', view === 'grid' ? 'bg-blue-600 text-white' : 'text-muted hover:text-secondary hover:bg-raised')}
-                >
+                <button onClick={() => setView('grid')} title="Grid view"
+                  className={clsx('p-1.5 transition-colors', view === 'grid' ? 'bg-blue-600 text-white' : 'text-muted hover:text-secondary hover:bg-raised')}>
                   <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
                     <path d="M5 3a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2V5a2 2 0 00-2-2H5zm0 8a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2v-2a2 2 0 00-2-2H5zm6-6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V5zm0 8a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
                   </svg>
                 </button>
-                <button
-                  onClick={() => setView('list')}
-                  title="List view"
-                  className={clsx('p-1.5 transition-colors', view === 'list' ? 'bg-blue-600 text-white' : 'text-muted hover:text-secondary hover:bg-raised')}
-                >
+                <button onClick={() => setView('list')} title="List view"
+                  className={clsx('p-1.5 transition-colors', view === 'list' ? 'bg-blue-600 text-white' : 'text-muted hover:text-secondary hover:bg-raised')}>
                   <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 10h16M4 14h16M4 18h16" />
                   </svg>
                 </button>
               </div>
             </div>
-          </div>
+          )}
 
           {view === 'grid' ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-stretch">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 items-stretch">
               {paginated.map((sop, i) => (
                 <div
                   key={sop.id}

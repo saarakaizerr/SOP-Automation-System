@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import clsx from 'clsx'
@@ -8,7 +8,6 @@ import { useAuthContext } from '../contexts/AuthContext'
 
 interface Props { sop: SOPListItem }
 
-// ── Tag colours ───────────────────────────────────────────────
 const TAG_COLOR_MAP: Record<string, string> = {
   blue:   'bg-blue-500/10 text-blue-400 border-blue-500/20',
   purple: 'bg-purple-500/10 text-purple-400 border-purple-500/20',
@@ -33,20 +32,19 @@ function nextColor(current: string) {
   return TAG_COLOR_KEYS[(idx + 1) % TAG_COLOR_KEYS.length]
 }
 
-// ── Status config ─────────────────────────────────────────────
 const statusConfig: Record<SOPStatus, {
   label: string
   heroBg: string
-  strip: string
+  borderLeft: string
   badge: string
   dot: string
   hoverShadow: string
   hoverBorder: string
 }> = {
   processing: {
-    label: 'Processing',
-    heroBg: 'bg-gradient-to-br from-violet-500/20 to-indigo-500/10',
-    strip: 'bg-gradient-to-r from-violet-500 to-indigo-500',
+    label: 'In Processing',
+    heroBg: 'bg-gradient-to-br from-violet-500/15 to-indigo-500/8',
+    borderLeft: 'border-l-violet-500',
     badge: 'bg-violet-500/15 text-violet-400 border-violet-500/25',
     dot: 'bg-violet-400 animate-pulse',
     hoverShadow: 'hover:shadow-violet-500/15',
@@ -54,17 +52,17 @@ const statusConfig: Record<SOPStatus, {
   },
   draft: {
     label: 'Draft',
-    heroBg: 'bg-gradient-to-br from-slate-500/12 to-slate-600/6',
-    strip: 'bg-gradient-to-r from-slate-400 to-slate-500',
-    badge: 'bg-raised text-muted border-default',
-    dot: 'bg-slate-400',
-    hoverShadow: 'hover:shadow-slate-400/10',
-    hoverBorder: 'hover:border-slate-400/30',
+    heroBg: 'bg-gradient-to-br from-amber-500/10 to-orange-500/5',
+    borderLeft: 'border-l-amber-500',
+    badge: 'bg-amber-500/15 text-amber-400 border-amber-500/25',
+    dot: 'bg-amber-400',
+    hoverShadow: 'hover:shadow-amber-400/10',
+    hoverBorder: 'hover:border-amber-400/30',
   },
   in_review: {
     label: 'In Review',
-    heroBg: 'bg-gradient-to-br from-blue-500/20 to-cyan-500/10',
-    strip: 'bg-gradient-to-r from-blue-500 to-cyan-400',
+    heroBg: 'bg-gradient-to-br from-blue-500/15 to-cyan-500/8',
+    borderLeft: 'border-l-blue-500',
     badge: 'bg-blue-500/15 text-blue-400 border-blue-500/25',
     dot: 'bg-blue-400',
     hoverShadow: 'hover:shadow-blue-500/15',
@@ -72,8 +70,8 @@ const statusConfig: Record<SOPStatus, {
   },
   published: {
     label: 'Published',
-    heroBg: 'bg-gradient-to-br from-emerald-500/20 to-teal-500/10',
-    strip: 'bg-gradient-to-r from-emerald-500 to-teal-400',
+    heroBg: 'bg-gradient-to-br from-emerald-500/15 to-teal-500/8',
+    borderLeft: 'border-l-emerald-500',
     badge: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/25',
     dot: 'bg-emerald-400',
     hoverShadow: 'hover:shadow-emerald-500/15',
@@ -82,7 +80,7 @@ const statusConfig: Record<SOPStatus, {
   archived: {
     label: 'Archived',
     heroBg: 'bg-gradient-to-br from-gray-500/10 to-gray-600/5',
-    strip: 'bg-gradient-to-r from-gray-400 to-gray-500',
+    borderLeft: 'border-l-gray-500',
     badge: 'bg-raised text-muted border-default',
     dot: 'bg-gray-400',
     hoverShadow: 'hover:shadow-gray-400/10',
@@ -90,18 +88,12 @@ const statusConfig: Record<SOPStatus, {
   },
 }
 
-// ── Per-card avatar colour (hash of sop.id) ───────────────────
 const AVATAR_GRADIENTS = [
-  'from-violet-500 to-indigo-600',
-  'from-blue-500 to-cyan-600',
-  'from-emerald-500 to-teal-600',
-  'from-rose-500 to-pink-600',
-  'from-amber-500 to-orange-600',
-  'from-teal-500 to-green-600',
-  'from-indigo-500 to-purple-600',
-  'from-pink-500 to-rose-600',
-  'from-cyan-500 to-blue-600',
-  'from-orange-500 to-red-600',
+  'from-violet-500 to-indigo-600', 'from-blue-500 to-cyan-600',
+  'from-emerald-500 to-teal-600',  'from-rose-500 to-pink-600',
+  'from-amber-500 to-orange-600',  'from-teal-500 to-green-600',
+  'from-indigo-500 to-purple-600', 'from-pink-500 to-rose-600',
+  'from-cyan-500 to-blue-600',     'from-orange-500 to-red-600',
 ]
 function avatarGrad(id: string) {
   let h = 0
@@ -109,12 +101,10 @@ function avatarGrad(id: string) {
   return AVATAR_GRADIENTS[h % AVATAR_GRADIENTS.length]
 }
 
-// ── Pipeline stages ───────────────────────────────────────────
 const PIPELINE_STAGES = [
   'transcribing', 'detecting_screenshare', 'extracting_frames', 'deduplicating',
   'classifying_frames', 'generating_annotations', 'extracting_clips', 'generating_sections',
 ]
-
 
 function Initials({ name }: { name: string }) {
   const words = name.trim().split(/\s+/).filter(w => /[a-zA-Z0-9]/.test(w[0]))
@@ -129,16 +119,25 @@ function formatDate(d: string | null) {
   return new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
-// ── Card ──────────────────────────────────────────────────────
 export function SOPCard({ sop }: Props) {
   const navigate = useNavigate()
   const { appUser } = useAuthContext()
   const qc = useQueryClient()
   const [confirming, setConfirming] = useState(false)
+  const [menuOpen, setMenuOpen] = useState(false)
   const [addingTag, setAddingTag] = useState(false)
   const [tagInput, setTagInput] = useState('')
   const [tagColor, setTagColor] = useState('blue')
   const tagInputRef = useRef<HTMLInputElement>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false)
+    }
+    if (menuOpen) document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [menuOpen])
 
   const cfg = statusConfig[sop.status] ?? statusConfig.draft
   const grad = avatarGrad(sop.id)
@@ -199,27 +198,20 @@ export function SOPCard({ sop }: Props) {
         'group relative bg-card rounded-2xl border border-subtle cursor-pointer',
         'hover:shadow-xl hover:-translate-y-0.5 transition-all duration-200 overflow-hidden',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2',
-        'flex flex-col h-full w-full',
-        cfg.hoverBorder, cfg.hoverShadow,
+        'flex flex-col h-full w-full border-l-4',
+        cfg.borderLeft, cfg.hoverBorder, cfg.hoverShadow,
       )}
     >
-      {/* ── Status accent strip ────────────────────────────────── */}
-      <div className={clsx('h-1.5 w-full shrink-0', cfg.strip)} />
-
-      {/* ── Header: avatar + title + badge in one row ──────────── */}
+      {/* ── Header ────────────────────────────────────────────── */}
       <div className={clsx('px-5 pt-4 pb-4 flex items-start gap-3', cfg.heroBg)}>
         {isPipelineRunning ? (
           <div className="relative shrink-0 w-12 h-12 mt-0.5">
-            <svg className="absolute inset-0 w-12 h-12 -rotate-90" viewBox="0 0 48 48" style={{ filter: 'drop-shadow(0 0 5px rgba(139,92,246,0.5))' }}>
+            <svg className="absolute inset-0 w-12 h-12 -rotate-90" viewBox="0 0 48 48"
+              style={{ filter: 'drop-shadow(0 0 5px rgba(139,92,246,0.5))' }}>
               <circle cx="24" cy="24" r="21" fill="none" strokeWidth="4" stroke="rgba(139,92,246,0.15)" />
-              <circle
-                cx="24" cy="24" r="21"
-                fill="none" strokeWidth="4" stroke="url(#ring-grad)"
-                strokeDasharray={ringCirc}
-                strokeDashoffset={ringOffset}
-                strokeLinecap="round"
-                style={{ transition: 'stroke-dashoffset 0.7s ease' }}
-              />
+              <circle cx="24" cy="24" r="21" fill="none" strokeWidth="4" stroke="url(#ring-grad)"
+                strokeDasharray={ringCirc} strokeDashoffset={ringOffset}
+                strokeLinecap="round" style={{ transition: 'stroke-dashoffset 0.7s ease' }} />
               <defs>
                 <linearGradient id="ring-grad" x1="0%" y1="0%" x2="100%" y2="0%">
                   <stop offset="0%" stopColor="#8b5cf6" />
@@ -229,18 +221,16 @@ export function SOPCard({ sop }: Props) {
             </svg>
             <div className={clsx(
               'absolute top-1 left-1 w-10 h-10 rounded-full flex items-center justify-center',
-              'text-white text-xs font-bold bg-gradient-to-br shadow-md',
-              grad,
+              'text-white text-xs font-bold bg-gradient-to-br shadow-md', grad,
             )}>
               <Initials name={displayName} />
             </div>
           </div>
         ) : (
           <div className={clsx(
-            'shrink-0 w-10 h-10 rounded-xl flex items-center justify-center',
-            'text-white text-xs font-bold shadow-md bg-gradient-to-br',
-            'transition-transform duration-200 group-hover:scale-105 mt-0.5',
-            grad,
+            'shrink-0 w-10 h-10 rounded-full flex items-center justify-center',
+            'text-white text-xs font-bold shadow-md bg-gradient-to-br mt-0.5',
+            'transition-transform duration-200 group-hover:scale-105', grad,
           )}>
             <Initials name={displayName} />
           </div>
@@ -264,7 +254,7 @@ export function SOPCard({ sop }: Props) {
         </div>
       </div>
 
-      {/* ── Footer (mt-auto = always sticks to bottom) ─────────── */}
+      {/* ── Footer ────────────────────────────────────────────── */}
       <div className="mt-auto px-5 pb-4 pt-3 border-t border-subtle" onClick={e => e.stopPropagation()}>
         {sop.pipeline_status === 'failed' && (
           <div className="mb-3 flex items-center gap-2 text-xs text-red-500 font-medium bg-red-500/5 border border-red-500/20 rounded-lg px-3 py-2">
@@ -275,20 +265,15 @@ export function SOPCard({ sop }: Props) {
           </div>
         )}
 
-        {/* Tags row */}
+        {/* Tags */}
         {(tags.length > 0 || canEdit) && (
           <div className="flex flex-wrap gap-1.5 items-center mb-3">
             {tags.map(tag => (
-              <span
-                key={tag.name}
-                className={clsx('inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border font-medium', tagClasses(tag.color))}
-              >
+              <span key={tag.name}
+                className={clsx('inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border font-medium', tagClasses(tag.color))}>
                 {canEdit && (
-                  <button
-                    title="Change colour"
-                    onClick={e => cycleColor(tag.name, e)}
-                    className={clsx('w-2.5 h-2.5 rounded-full shrink-0 hover:scale-125 transition-transform', TAG_DOT_MAP[tag.color] ?? 'bg-blue-400')}
-                  />
+                  <button title="Change colour" onClick={e => cycleColor(tag.name, e)}
+                    className={clsx('w-2.5 h-2.5 rounded-full shrink-0 hover:scale-125 transition-transform', TAG_DOT_MAP[tag.color] ?? 'bg-blue-400')} />
                 )}
                 {tag.name}
                 {canEdit && (
@@ -305,66 +290,59 @@ export function SOPCard({ sop }: Props) {
                       {tagInput.trim() || 'preview'}
                     </span>
                   </div>
-                  <input
-                    ref={tagInputRef}
-                    value={tagInput}
+                  <input ref={tagInputRef} value={tagInput}
                     onChange={e => setTagInput(e.target.value)}
                     onKeyDown={e => {
                       if (e.key === 'Enter') { e.preventDefault(); commitTag() }
                       if (e.key === 'Escape') { setAddingTag(false); setTagInput(''); setTagColor('blue') }
                     }}
                     placeholder="Tag name…"
-                    className="w-full text-xs px-2.5 py-1.5 border border-default rounded-lg outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100 mb-2.5 bg-transparent text-default"
+                    className="w-full text-xs px-2.5 py-1.5 border border-default rounded-lg outline-none focus:border-blue-400 mb-2.5 bg-transparent text-default"
                   />
                   <div className="flex gap-1.5 mb-3">
                     {TAG_COLOR_KEYS.map(c => (
-                      <button
-                        key={c}
-                        onClick={e => { e.stopPropagation(); setTagColor(c) }}
-                        title={c}
-                        className={clsx('w-5 h-5 rounded-full transition-all hover:scale-110', TAG_DOT_MAP[c], tagColor === c ? 'ring-2 ring-offset-1 ring-current scale-110' : 'opacity-50 hover:opacity-100')}
-                      />
+                      <button key={c} onClick={e => { e.stopPropagation(); setTagColor(c) }} title={c}
+                        className={clsx('w-5 h-5 rounded-full transition-all hover:scale-110', TAG_DOT_MAP[c], tagColor === c ? 'ring-2 ring-offset-1 ring-current scale-110' : 'opacity-50 hover:opacity-100')} />
                     ))}
                   </div>
                   <div className="flex gap-1.5">
-                    <button
-                      onClick={e => { e.stopPropagation(); commitTag() }}
-                      disabled={!tagInput.trim()}
-                      className="flex-1 text-xs py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed font-medium transition-colors"
-                    >Add tag</button>
-                    <button
-                      onClick={e => { e.stopPropagation(); setAddingTag(false); setTagInput(''); setTagColor('blue') }}
-                      className="text-xs px-3 py-1.5 border border-default rounded-lg text-muted hover:bg-raised transition-colors"
-                    >Cancel</button>
+                    <button onClick={e => { e.stopPropagation(); commitTag() }} disabled={!tagInput.trim()}
+                      className="flex-1 text-xs py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-40 font-medium transition-colors">Add tag</button>
+                    <button onClick={e => { e.stopPropagation(); setAddingTag(false); setTagInput(''); setTagColor('blue') }}
+                      className="text-xs px-3 py-1.5 border border-default rounded-lg text-muted hover:bg-raised transition-colors">Cancel</button>
                   </div>
                 </div>
               ) : (
-                <button
-                  onClick={openTagInput}
-                  className="text-xs px-2.5 py-1 border border-dashed border-default rounded-full text-muted hover:border-blue-400/50 hover:text-blue-400 transition-all"
-                >+ Add tag</button>
+                <button onClick={openTagInput}
+                  className="text-xs px-2.5 py-1 border border-dashed border-default rounded-full text-muted hover:border-blue-400/50 hover:text-blue-400 transition-all">
+                  + Add tag
+                </button>
               )
             )}
           </div>
         )}
 
-        {/* Meta + actions row */}
+        {/* Meta + actions */}
         <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2 text-xs text-muted min-w-0">
-            <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-            </svg>
-            <span className="shrink-0">{sop.step_count} {sop.step_count === 1 ? 'step' : 'steps'}</span>
-            {sop.meeting_date && (
-              <>
-                <span className="text-muted/30">·</span>
-                <span className="truncate">{formatDate(sop.meeting_date)}</span>
-              </>
-            )}
-          </div>
-          <div className="flex items-center gap-1.5 shrink-0">
-            {!confirming ? (
-              <>
+          {!confirming ? (
+            <>
+              <div className="flex items-center gap-3 text-xs text-muted">
+                <span className="flex items-center gap-1">
+                  <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                  </svg>
+                  {sop.step_count} {sop.step_count === 1 ? 'step' : 'steps'}
+                </span>
+                {sop.meeting_date && (
+                  <span className="flex items-center gap-1">
+                    <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                    {formatDate(sop.meeting_date)}
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-1.5 shrink-0">
                 <button
                   onClick={e => { e.stopPropagation(); openCard() }}
                   className="flex items-center gap-1.5 text-xs px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-500 active:scale-95 transition-all font-medium"
@@ -375,33 +353,47 @@ export function SOPCard({ sop }: Props) {
                   </svg>
                 </button>
                 {canEdit && (
-                  <button
-                    onClick={e => { e.stopPropagation(); setConfirming(true) }}
-                    className="w-7 h-7 flex items-center justify-center border border-default rounded-lg text-muted hover:border-red-400/40 hover:text-red-400 hover:bg-red-400/5 active:scale-95 transition-all"
-                    title="Delete"
-                  >
-                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
-                  </button>
+                  <div ref={menuRef} className="relative">
+                    <button
+                      onClick={e => { e.stopPropagation(); setMenuOpen(v => !v) }}
+                      className="w-7 h-7 flex items-center justify-center border border-default rounded-lg text-muted hover:bg-raised active:scale-95 transition-all"
+                    >
+                      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" />
+                      </svg>
+                    </button>
+                    {menuOpen && (
+                      <div className="absolute right-0 bottom-full mb-1.5 z-20 bg-card border border-default rounded-xl shadow-xl overflow-hidden min-w-[140px]"
+                        onClick={e => e.stopPropagation()}>
+                        <button
+                          onClick={e => { e.stopPropagation(); setMenuOpen(false); setConfirming(true) }}
+                          className="w-full text-left text-xs px-3 py-2.5 text-red-400 hover:bg-red-500/10 transition-colors flex items-center gap-2"
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                          Delete SOP
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 )}
-              </>
-            ) : (
-              <>
-                <button
-                  onClick={e => { e.stopPropagation(); setConfirming(false) }}
-                  className="text-xs px-2.5 py-1.5 border border-default rounded-lg text-muted hover:bg-raised transition-colors"
-                >Cancel</button>
-                <button
-                  onClick={e => { e.stopPropagation(); deleteMutation.mutate() }}
+              </div>
+            </>
+          ) : (
+            <>
+              <span className="text-xs text-muted">Delete this SOP?</span>
+              <div className="flex items-center gap-1.5">
+                <button onClick={e => { e.stopPropagation(); setConfirming(false) }}
+                  className="text-xs px-2.5 py-1.5 border border-default rounded-lg text-muted hover:bg-raised transition-colors">Cancel</button>
+                <button onClick={e => { e.stopPropagation(); deleteMutation.mutate() }}
                   disabled={deleteMutation.isPending}
-                  className="text-xs px-2.5 py-1.5 bg-red-500 text-white rounded-lg hover:bg-red-600 active:scale-95 transition-all font-medium disabled:opacity-60"
-                >
+                  className="text-xs px-2.5 py-1.5 bg-red-500 text-white rounded-lg hover:bg-red-600 active:scale-95 transition-all font-medium disabled:opacity-60">
                   {deleteMutation.isPending ? 'Deleting…' : 'Delete'}
                 </button>
-              </>
-            )}
-          </div>
+              </div>
+            </>
+          )}
         </div>
       </div>
     </div>
