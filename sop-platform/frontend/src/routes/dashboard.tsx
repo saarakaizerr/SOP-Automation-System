@@ -486,11 +486,11 @@ function Dashboard() {
           </div>
 
           {view === 'grid' ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-stretch">
               {paginated.map((sop, i) => (
                 <div
                   key={sop.id}
-                  className="animate-fade-in-up"
+                  className="animate-fade-in-up flex"
                   style={{ animationDelay: `${i * 40}ms` }}
                 >
                   <SOPCard sop={sop} />
