@@ -131,4 +131,7 @@ jobs:
 
       - name: Health check sop-api
         run: |
-          curl --retry 5 --retry-delay 10 --fail https://soptest.cloudnavision.com/health
+          echo "Waiting 30s for new revision to start..."
+          sleep 30
+          curl --retry 12 --retry-delay 15 --retry-connrefused --fail \
+            https://soptest.cloudnavision.com/health
