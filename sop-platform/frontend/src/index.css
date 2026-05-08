@@ -51,3 +51,12 @@
   border-radius: 99px;
 }
 ::-webkit-scrollbar-thumb:hover { filter: brightness(0.85); }
+
+/* ─── Animations ─────────────────────────────────────────── */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in-up {
+  animation: fadeInUp 0.25s ease both;
+}
