@@ -235,46 +235,44 @@ export function SOPCard({ sop }: Props) {
         'group relative bg-card rounded-2xl border border-subtle cursor-pointer',
         'hover:shadow-xl hover:-translate-y-0.5 transition-all duration-200 overflow-hidden',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2',
-        'flex flex-col h-full',
+        'flex flex-col h-full w-full',
         cfg.hoverBorder, cfg.hoverShadow,
       )}
     >
       {/* ── Status accent strip ────────────────────────────────── */}
-      <div className={clsx('h-1 w-full shrink-0', cfg.strip)} />
+      <div className={clsx('h-1.5 w-full shrink-0', cfg.strip)} />
 
-      {/* ── Hero header ────────────────────────────────────────── */}
-      <div className={clsx('px-5 pt-4 pb-4', cfg.heroBg)}>
-        {/* Avatar row */}
-        <div className="flex items-start justify-between gap-3 mb-3">
-          <div className={clsx(
-            'shrink-0 w-11 h-11 rounded-xl flex items-center justify-center',
-            'text-white text-sm font-bold shadow-md bg-gradient-to-br',
-            'transition-transform duration-200 group-hover:scale-105',
-            grad,
-          )}>
-            <Initials name={displayName} />
-          </div>
-          <span className={clsx(
-            'text-xs font-medium px-2.5 py-1 rounded-full border flex items-center gap-1.5 shrink-0 mt-0.5',
-            cfg.badge,
-          )}>
-            <span className={clsx('w-1.5 h-1.5 rounded-full shrink-0', cfg.dot)} />
-            {cfg.label}
-          </span>
+      {/* ── Header: avatar + title + badge in one row ──────────── */}
+      <div className={clsx('px-5 pt-4 pb-4 flex items-start gap-3', cfg.heroBg)}>
+        <div className={clsx(
+          'shrink-0 w-10 h-10 rounded-xl flex items-center justify-center',
+          'text-white text-xs font-bold shadow-md bg-gradient-to-br',
+          'transition-transform duration-200 group-hover:scale-105 mt-0.5',
+          grad,
+        )}>
+          <Initials name={displayName} />
         </div>
-
-        {/* Title */}
-        <h3 className="text-sm font-semibold text-default leading-snug line-clamp-2 pr-1">
-          {displayName}
-        </h3>
-        {sop.client_name && (
-          <p className="text-xs text-muted mt-1 truncate">{sop.client_name}</p>
-        )}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-start justify-between gap-2">
+            <h3 className="text-sm font-semibold text-default leading-snug line-clamp-2 flex-1">
+              {displayName}
+            </h3>
+            <span className={clsx(
+              'text-xs font-medium px-2.5 py-1 rounded-full border flex items-center gap-1.5 shrink-0 whitespace-nowrap',
+              cfg.badge,
+            )}>
+              <span className={clsx('w-1.5 h-1.5 rounded-full shrink-0', cfg.dot)} />
+              {cfg.label}
+            </span>
+          </div>
+          {sop.client_name && (
+            <p className="text-xs text-muted mt-1 truncate">{sop.client_name}</p>
+          )}
+        </div>
       </div>
 
       {/* ── Body ───────────────────────────────────────────────── */}
-      <div className="flex-1 flex flex-col gap-3 px-5 py-4" onClick={e => e.stopPropagation()}>
-        {/* Pipeline progress */}
+      <div className="flex-1 flex flex-col gap-2.5 px-5 pb-4" onClick={e => e.stopPropagation()}>
         {isPipelineRunning && (
           <PipelineProgress
             status={sop.pipeline_status ?? null}
@@ -290,7 +288,6 @@ export function SOPCard({ sop }: Props) {
           </div>
         )}
 
-        {/* Tags */}
         {(tags.length > 0 || canEdit) && (
           <div className="flex flex-wrap gap-1.5 items-center">
             {tags.map(tag => (
@@ -366,8 +363,7 @@ export function SOPCard({ sop }: Props) {
       </div>
 
       {/* ── Footer ─────────────────────────────────────────────── */}
-      <div className="px-5 pb-4 pt-3 border-t border-subtle flex items-center justify-between gap-2 mt-auto">
-        {/* Meta */}
+      <div className="px-5 pb-4 pt-3 border-t border-subtle flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 text-xs text-muted min-w-0">
           <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
@@ -381,7 +377,6 @@ export function SOPCard({ sop }: Props) {
           )}
         </div>
 
-        {/* Actions */}
         <div className="flex items-center gap-1.5 shrink-0" onClick={e => e.stopPropagation()}>
           {!confirming ? (
             <>

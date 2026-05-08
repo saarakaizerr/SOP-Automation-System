@@ -498,7 +498,7 @@ function Dashboard() {
               {paginated.map((sop, i) => (
                 <div
                   key={sop.id}
-                  className="animate-fade-in-up flex"
+                  className="animate-fade-in-up flex h-full"
                   style={{ animationDelay: `${i * 40}ms` }}
                 >
                   <SOPCard sop={sop} />
