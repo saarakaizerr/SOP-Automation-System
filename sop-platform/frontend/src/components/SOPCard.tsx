@@ -271,25 +271,29 @@ export function SOPCard({ sop }: Props) {
         </div>
       </div>
 
-      {/* ── Body ───────────────────────────────────────────────── */}
-      <div className="flex-1 flex flex-col gap-2.5 px-5 pb-4" onClick={e => e.stopPropagation()}>
-        {isPipelineRunning && (
+      {/* ── Pipeline (only when active) ─────────────────────────── */}
+      {isPipelineRunning && (
+        <div className="px-5 pb-3">
           <PipelineProgress
             status={sop.pipeline_status ?? null}
             stage={sop.pipeline_stage ?? null}
           />
-        )}
-        {sop.pipeline_status === 'failed' && (
-          <div className="flex items-center gap-2 text-xs text-red-500 font-medium bg-red-500/5 border border-red-500/20 rounded-lg px-3 py-2">
-            <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
-            </svg>
-            Pipeline failed — please re-process
-          </div>
-        )}
+        </div>
+      )}
+      {sop.pipeline_status === 'failed' && (
+        <div className="mx-5 mb-3 flex items-center gap-2 text-xs text-red-500 font-medium bg-red-500/5 border border-red-500/20 rounded-lg px-3 py-2">
+          <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+          </svg>
+          Pipeline failed — please re-process
+        </div>
+      )}
 
+      {/* ── Footer (mt-auto = always sticks to bottom) ─────────── */}
+      <div className="mt-auto px-5 pb-4 pt-3 border-t border-subtle" onClick={e => e.stopPropagation()}>
+        {/* Tags row */}
         {(tags.length > 0 || canEdit) && (
-          <div className="flex flex-wrap gap-1.5 items-center">
+          <div className="flex flex-wrap gap-1.5 items-center mb-3">
             {tags.map(tag => (
               <span
                 key={tag.name}
@@ -308,7 +312,6 @@ export function SOPCard({ sop }: Props) {
                 )}
               </span>
             ))}
-
             {canEdit && (
               addingTag ? (
                 <div className="w-full mt-1 p-3 bg-raised border border-default rounded-xl shadow-lg" onClick={e => e.stopPropagation()}>
@@ -360,62 +363,61 @@ export function SOPCard({ sop }: Props) {
             )}
           </div>
         )}
-      </div>
 
-      {/* ── Footer ─────────────────────────────────────────────── */}
-      <div className="px-5 pb-4 pt-3 border-t border-subtle flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2 text-xs text-muted min-w-0">
-          <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-          </svg>
-          <span className="shrink-0">{sop.step_count} {sop.step_count === 1 ? 'step' : 'steps'}</span>
-          {sop.meeting_date && (
-            <>
-              <span className="text-muted/30">·</span>
-              <span className="truncate">{formatDate(sop.meeting_date)}</span>
-            </>
-          )}
-        </div>
-
-        <div className="flex items-center gap-1.5 shrink-0" onClick={e => e.stopPropagation()}>
-          {!confirming ? (
-            <>
-              <button
-                onClick={e => { e.stopPropagation(); openCard() }}
-                className="flex items-center gap-1.5 text-xs px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-500 active:scale-95 transition-all font-medium"
-              >
-                Open
-                <svg className="w-3 h-3 opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                </svg>
-              </button>
-              {canEdit && (
+        {/* Meta + actions row */}
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 text-xs text-muted min-w-0">
+            <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+            </svg>
+            <span className="shrink-0">{sop.step_count} {sop.step_count === 1 ? 'step' : 'steps'}</span>
+            {sop.meeting_date && (
+              <>
+                <span className="text-muted/30">·</span>
+                <span className="truncate">{formatDate(sop.meeting_date)}</span>
+              </>
+            )}
+          </div>
+          <div className="flex items-center gap-1.5 shrink-0">
+            {!confirming ? (
+              <>
                 <button
-                  onClick={e => { e.stopPropagation(); setConfirming(true) }}
-                  className="w-7 h-7 flex items-center justify-center border border-default rounded-lg text-muted hover:border-red-400/40 hover:text-red-400 hover:bg-red-400/5 active:scale-95 transition-all"
-                  title="Delete"
+                  onClick={e => { e.stopPropagation(); openCard() }}
+                  className="flex items-center gap-1.5 text-xs px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-500 active:scale-95 transition-all font-medium"
                 >
-                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  Open
+                  <svg className="w-3 h-3 opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                   </svg>
                 </button>
-              )}
-            </>
-          ) : (
-            <>
-              <button
-                onClick={e => { e.stopPropagation(); setConfirming(false) }}
-                className="text-xs px-2.5 py-1.5 border border-default rounded-lg text-muted hover:bg-raised transition-colors"
-              >Cancel</button>
-              <button
-                onClick={e => { e.stopPropagation(); deleteMutation.mutate() }}
-                disabled={deleteMutation.isPending}
-                className="text-xs px-2.5 py-1.5 bg-red-500 text-white rounded-lg hover:bg-red-600 active:scale-95 transition-all font-medium disabled:opacity-60"
-              >
-                {deleteMutation.isPending ? 'Deleting…' : 'Delete'}
-              </button>
-            </>
-          )}
+                {canEdit && (
+                  <button
+                    onClick={e => { e.stopPropagation(); setConfirming(true) }}
+                    className="w-7 h-7 flex items-center justify-center border border-default rounded-lg text-muted hover:border-red-400/40 hover:text-red-400 hover:bg-red-400/5 active:scale-95 transition-all"
+                    title="Delete"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                  </button>
+                )}
+              </>
+            ) : (
+              <>
+                <button
+                  onClick={e => { e.stopPropagation(); setConfirming(false) }}
+                  className="text-xs px-2.5 py-1.5 border border-default rounded-lg text-muted hover:bg-raised transition-colors"
+                >Cancel</button>
+                <button
+                  onClick={e => { e.stopPropagation(); deleteMutation.mutate() }}
+                  disabled={deleteMutation.isPending}
+                  className="text-xs px-2.5 py-1.5 bg-red-500 text-white rounded-lg hover:bg-red-600 active:scale-95 transition-all font-medium disabled:opacity-60"
+                >
+                  {deleteMutation.isPending ? 'Deleting…' : 'Delete'}
+                </button>
+              </>
+            )}
+          </div>
         </div>
       </div>
     </div>
