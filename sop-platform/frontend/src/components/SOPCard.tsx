@@ -114,48 +114,7 @@ const PIPELINE_STAGES = [
   'transcribing', 'detecting_screenshare', 'extracting_frames', 'deduplicating',
   'classifying_frames', 'generating_annotations', 'extracting_clips', 'generating_sections',
 ]
-const stageLabel: Record<string, string> = {
-  transcribing:             'Transcribing audio',
-  detecting_screenshare:    'Detecting screen share',
-  extracting_frames:        'Extracting frames',
-  deduplicating:            'Removing duplicates',
-  classifying_frames:       'Classifying frames',
-  generating_annotations:   'Annotating screenshots',
-  extracting_clips:         'Extracting clips',
-  generating_sections:      'Generating sections',
-  transcription_complete:   'Transcription complete',
-  frame_extraction_complete:'Frames extracted',
-  screenshare_detected:     'Screen share detected',
-  annotation_complete:      'Annotations complete',
-  clips_extracted:          'Clips extracted',
-}
 
-function PipelineProgress({ status, stage }: { status: string | null; stage: string | null }) {
-  if (!status && !stage) return null
-  const idx = PIPELINE_STAGES.indexOf(status ?? '')
-  const pct = idx < 0 ? 5 : Math.round(((idx + 1) / PIPELINE_STAGES.length) * 100)
-  const displayStage = stage ?? status ?? ''
-  const label = stageLabel[displayStage] ?? stageLabel[status ?? ''] ?? displayStage.replace(/_/g, ' ')
-  return (
-    <div className="space-y-1.5">
-      <div className="flex justify-between items-center">
-        <span className="text-xs text-violet-400 font-medium flex items-center gap-1.5">
-          <span className="inline-block w-1.5 h-1.5 rounded-full bg-violet-400 animate-pulse" />
-          {label}
-        </span>
-        <span className="text-xs text-muted font-medium tabular-nums">{pct}%</span>
-      </div>
-      <div className="h-1.5 w-full bg-raised rounded-full overflow-hidden">
-        <div
-          className="h-full rounded-full transition-all duration-700 relative overflow-hidden"
-          style={{ width: `${pct}%`, background: 'linear-gradient(90deg, #8b5cf6, #6366f1)' }}
-        >
-          <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full animate-[shimmer_2s_infinite]" />
-        </div>
-      </div>
-    </div>
-  )
-}
 
 function Initials({ name }: { name: string }) {
   const words = name.trim().split(/\s+/).filter(w => /[a-zA-Z0-9]/.test(w[0]))
@@ -189,6 +148,11 @@ export function SOPCard({ sop }: Props) {
   const isPipelineRunning = sop.pipeline_status
     && sop.pipeline_status !== 'completed'
     && sop.pipeline_status !== 'failed'
+
+  const pipelineIdx = PIPELINE_STAGES.indexOf(sop.pipeline_status ?? '')
+  const pipelinePct = pipelineIdx < 0 ? 5 : Math.round(((pipelineIdx + 1) / PIPELINE_STAGES.length) * 100)
+  const ringCirc = 2 * Math.PI * 22
+  const ringOffset = ringCirc * (1 - pipelinePct / 100)
 
   const cleanTitle = sop.title.replace(/\b\d{8}\s+\d{6}\b/g, '').replace(/\s{2,}/g, ' ').trim()
   const displayName = sop.process_name || cleanTitle
@@ -244,14 +208,37 @@ export function SOPCard({ sop }: Props) {
 
       {/* ── Header: avatar + title + badge in one row ──────────── */}
       <div className={clsx('px-5 pt-4 pb-4 flex items-start gap-3', cfg.heroBg)}>
-        <div className={clsx(
-          'shrink-0 w-10 h-10 rounded-xl flex items-center justify-center',
-          'text-white text-xs font-bold shadow-md bg-gradient-to-br',
-          'transition-transform duration-200 group-hover:scale-105 mt-0.5',
-          grad,
-        )}>
-          <Initials name={displayName} />
-        </div>
+        {isPipelineRunning ? (
+          <div className="relative shrink-0 w-12 h-12 mt-0.5">
+            <svg className="absolute inset-0 w-12 h-12 -rotate-90" viewBox="0 0 48 48">
+              <circle cx="24" cy="24" r="22" fill="none" strokeWidth="3" stroke="rgba(139,92,246,0.2)" />
+              <circle
+                cx="24" cy="24" r="22"
+                fill="none" strokeWidth="3" stroke="#8b5cf6"
+                strokeDasharray={ringCirc}
+                strokeDashoffset={ringOffset}
+                strokeLinecap="round"
+                style={{ transition: 'stroke-dashoffset 0.7s ease' }}
+              />
+            </svg>
+            <div className={clsx(
+              'absolute top-1 left-1 w-10 h-10 rounded-full flex items-center justify-center',
+              'text-white text-xs font-bold bg-gradient-to-br shadow-md',
+              grad,
+            )}>
+              <Initials name={displayName} />
+            </div>
+          </div>
+        ) : (
+          <div className={clsx(
+            'shrink-0 w-10 h-10 rounded-xl flex items-center justify-center',
+            'text-white text-xs font-bold shadow-md bg-gradient-to-br',
+            'transition-transform duration-200 group-hover:scale-105 mt-0.5',
+            grad,
+          )}>
+            <Initials name={displayName} />
+          </div>
+        )}
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-2">
             <h3 className="text-sm font-semibold text-default leading-snug line-clamp-2 flex-1">
@@ -273,15 +260,6 @@ export function SOPCard({ sop }: Props) {
 
       {/* ── Footer (mt-auto = always sticks to bottom) ─────────── */}
       <div className="mt-auto px-5 pb-4 pt-3 border-t border-subtle" onClick={e => e.stopPropagation()}>
-        {/* Pipeline progress — inside footer so no floating gap */}
-        {isPipelineRunning && (
-          <div className="mb-3">
-            <PipelineProgress
-              status={sop.pipeline_status ?? null}
-              stage={sop.pipeline_stage ?? null}
-            />
-          </div>
-        )}
         {sop.pipeline_status === 'failed' && (
           <div className="mb-3 flex items-center gap-2 text-xs text-red-500 font-medium bg-red-500/5 border border-red-500/20 rounded-lg px-3 py-2">
             <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
