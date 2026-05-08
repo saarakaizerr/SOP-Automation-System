@@ -203,7 +203,7 @@ export function SOPCard({ sop }: Props) {
       )}
     >
       {/* ── Header ────────────────────────────────────────────── */}
-      <div className={clsx('px-5 pt-4 pb-4 flex items-start gap-3', cfg.heroBg)}>
+      <div className="px-5 pt-4 pb-4 flex items-start gap-3">
         {isPipelineRunning ? (
           <div className="relative shrink-0 w-12 h-12 mt-0.5">
             <svg className="absolute inset-0 w-12 h-12 -rotate-90" viewBox="0 0 48 48"
