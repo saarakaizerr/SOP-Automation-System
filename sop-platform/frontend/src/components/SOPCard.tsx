@@ -252,6 +252,12 @@ export function SOPCard({ sop }: Props) {
             <p className="text-xs text-muted mt-1 truncate">{sop.client_name}</p>
           )}
         </div>
+        <svg
+          className="shrink-0 w-4 h-4 text-muted opacity-30 group-hover:opacity-60 group-hover:translate-x-0.5 transition-all mt-1"
+          fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+        </svg>
       </div>
 
       {/* ── Footer ────────────────────────────────────────────── */}
