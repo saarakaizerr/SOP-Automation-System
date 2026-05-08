@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useId } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
 import { fetchSOPs, sopKeys } from '../api/client'
@@ -228,7 +228,6 @@ function Dashboard() {
   const inputRef = useRef<HTMLInputElement>(null)
   const { appUser } = useAuth()
   const canMerge = appUser?.role === 'editor' || appUser?.role === 'admin'
-  const listKey = useId()
 
   const { data: sops, isLoading, error } = useQuery({
     queryKey: sopKeys.all,
