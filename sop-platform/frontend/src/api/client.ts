@@ -60,14 +60,27 @@ export interface ExportResponse {
 
 export async function exportSOP(id: string, format: 'docx' | 'pdf'): Promise<ExportResponse> {
   const headers = await getAuthHeaders()
-  const res = await fetch(`${API_BASE}/api/sops/${id}/export?format=${format}`, {
+
+  // Start async export job — returns immediately with export_id
+  const startRes = await fetch(`${API_BASE}/api/sops/${id}/export?format=${format}`, {
     method: 'POST',
     headers,
   })
-  if (!res.ok) {
-    throw new Error(`Export failed: ${res.status} ${res.statusText}`)
+  if (!startRes.ok) {
+    throw new Error(`Export failed: ${startRes.status} ${startRes.statusText}`)
   }
-  return res.json() as Promise<ExportResponse>
+  const { export_id } = await startRes.json() as { export_id: string }
+
+  // Poll until done (max 10 minutes, every 4s)
+  for (let i = 0; i < 150; i++) {
+    await new Promise(resolve => setTimeout(resolve, 4000))
+    const pollRes = await fetch(`${API_BASE}/api/exports/${export_id}`, { headers })
+    if (!pollRes.ok) throw new Error('Failed to check export status')
+    const job = await pollRes.json() as { status: string; download_url: string; filename: string; format: string; error: string | null }
+    if (job.status === 'done') return { download_url: job.download_url, filename: job.filename, format: job.format }
+    if (job.status === 'error') throw new Error(job.error ?? 'Export failed')
+  }
+  throw new Error('Export timed out — please try again')
 }
 
 export interface RenderAnnotatedResponse {

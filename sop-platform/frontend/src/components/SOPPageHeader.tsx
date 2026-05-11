@@ -52,14 +52,14 @@ export function SOPPageHeader({ sop }: Props) {
     onError: () => showToast('Failed to update status', 'err'),
   })
 
-  function showToast(msg: string, type: 'ok' | 'err' = 'ok') {
+  function showToast(msg: string, type: 'ok' | 'err' = 'ok', duration = 2800) {
     setToast({ msg, type })
-    setTimeout(() => setToast(null), 2800)
+    if (duration > 0) setTimeout(() => setToast(null), duration)
   }
 
   async function handleExport(format: 'docx' | 'pdf') {
     setExporting(format)
-    showToast('Generating document…')
+    showToast('Generating document — this may take a minute…', 'ok', 0)
     try {
       const { download_url, filename } = await exportSOP(sop.id, format)
       const a = document.createElement('a')
