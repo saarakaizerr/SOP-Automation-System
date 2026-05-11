@@ -124,7 +124,7 @@ jobs:
               'CORS_ORIGINS=["https://sopapp.cloudnavision.com","https://soptest.cloudnavision.com"]' \
               'AZURE_BLOB_BASE_URL=https://cnavinfsop.blob.core.windows.net/infsop' \
               'N8N_WEBHOOK_BASE_URL=https://azuren8n.cloudnavision.com' \
-              'EXTRACTOR_BASE_URL=http://sop-extractor.internal.whitemeadow-cfe4a842.southeastasia.azurecontainerapps.io'
+              'EXTRACTOR_URL=http://sop-extractor.internal.whitemeadow-cfe4a842.southeastasia.azurecontainerapps.io'
 
       - name: Deploy sop-extractor
         run: |
