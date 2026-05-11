@@ -30,7 +30,7 @@ BORDER   = RGBColor(0xD1, 0xD5, 0xDB)   # table border
 
 TEMPLATE_PATH = Path("/data/templates/sop_template.docx")
 _VERSION_PATH = TEMPLATE_PATH.with_suffix(".version")
-_TEMPLATE_VERSION = "5"  # increment when template structure changes
+_TEMPLATE_VERSION = "6"  # increment when template structure changes
 
 
 def _set_run_font(run, size_pt: float, bold=False, italic=False, color=None):
@@ -135,6 +135,80 @@ def _ctrl_para(doc, tag: str):
     p.paragraph_format.space_before = Pt(0)
 
 
+def _add_page_number_to_run(run) -> None:
+    """Insert a PAGE field into the given run element."""
+    fld_begin = OxmlElement("w:fldChar")
+    fld_begin.set(qn("w:fldCharType"), "begin")
+    run._r.append(fld_begin)
+    instr = OxmlElement("w:instrText")
+    instr.set(qn("xml:space"), "preserve")
+    instr.text = " PAGE "
+    run._r.append(instr)
+    fld_end = OxmlElement("w:fldChar")
+    fld_end.set(qn("w:fldCharType"), "end")
+    run._r.append(fld_end)
+
+
+def _build_footer(section) -> None:
+    """Add Infomate-style footer to the section (non-first pages)."""
+    footer = section.footer
+    footer.is_linked_to_previous = False
+
+    # Reuse the default first paragraph as the orange rule (safer than removing it)
+    p_rule = footer.paragraphs[0]
+    p_rule.clear()
+    _para_shade(p_rule, "E85C1A")
+    _set_para_spacing(p_rule, before_pt=0, after_pt=3)
+    r = p_rule.add_run(" ")
+    _set_run_font(r, 3)
+
+    # URL line
+    p_url = footer.add_paragraph()
+    _set_para_spacing(p_url, before_pt=2, after_pt=0)
+    r_url = p_url.add_run("https://www.infomateworld.com/")
+    _set_run_font(r_url, 8, color=RGBColor(0x00, 0x00, 0xCC))
+
+    # Address line + right-aligned page number
+    p_addr = footer.add_paragraph()
+    _set_para_spacing(p_addr, before_pt=0, after_pt=0)
+    r_addr = p_addr.add_run("No 04, Leyden Bastian Street, Colombo 01, Sri Lanka")
+    _set_run_font(r_addr, 8, color=DARK)
+    # Right-aligned tab stop at 16 cm (9072 twips) for page number
+    pPr = p_addr._p.get_or_add_pPr()
+    tabs = OxmlElement("w:tabs")
+    tab = OxmlElement("w:tab")
+    tab.set(qn("w:val"), "right")
+    tab.set(qn("w:pos"), "9072")
+    tabs.append(tab)
+    pPr.append(tabs)
+    r_tab = p_addr.add_run("\t")
+    _set_run_font(r_tab, 8)
+    r_pgnum = p_addr.add_run("")
+    _set_run_font(r_pgnum, 8, color=DARK)
+    _add_page_number_to_run(r_pgnum)
+
+    # Classification line
+    p_class = footer.add_paragraph()
+    _set_para_spacing(p_class, before_pt=0, after_pt=0)
+    r_class = p_class.add_run("CloudNavision - General")
+    _set_run_font(r_class, 8, color=DARK)
+
+
+def _build_header(section) -> None:
+    """Add Infomate-style header to the section (non-first pages)."""
+    header = section.header
+    header.is_linked_to_previous = False
+
+    # Right-aligned orange decoration bar (approximates the orange tab in the Infomate template)
+    p_hdr = header.paragraphs[0]
+    p_hdr.clear()
+    p_hdr.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+    _set_para_spacing(p_hdr, before_pt=0, after_pt=0)
+    _para_shade(p_hdr, "E85C1A")
+    r_hdr = p_hdr.add_run("  ")
+    _set_run_font(r_hdr, 4, color=WHITE)
+
+
 def build(force: bool = False):
     if not force and TEMPLATE_PATH.exists():
         # Skip rebuild only if version matches
@@ -146,14 +220,18 @@ def build(force: bool = False):
 
     doc = Document()
 
-    # ── Page margins (matching A4 professional) ───────────────────────────────
-    for sec in doc.sections:
-        sec.page_width  = Cm(21)
-        sec.page_height = Cm(29.7)
-        sec.top_margin    = Cm(2.5)
-        sec.bottom_margin = Cm(2.5)
-        sec.left_margin   = Cm(3.0)
-        sec.right_margin  = Cm(2.0)
+    # ── Page setup (A4, professional margins) ────────────────────────────────
+    section = doc.sections[0]
+    section.page_width    = Cm(21)
+    section.page_height   = Cm(29.7)
+    section.top_margin    = Cm(2.5)
+    section.bottom_margin = Cm(2.5)
+    section.left_margin   = Cm(3.0)
+    section.right_margin  = Cm(2.0)
+    # Cover page (page 1) gets no header/footer; all other pages get the Infomate style
+    section.different_first_page_header_footer = True
+    _build_header(section)
+    _build_footer(section)
 
     # ── Default paragraph style ───────────────────────────────────────────────
     style = doc.styles["Normal"]
@@ -162,49 +240,11 @@ def build(force: bool = False):
     style.paragraph_format.space_after = Pt(6)
 
     # ── COVER PAGE ────────────────────────────────────────────────────────────
-    # Orange header bar
-    p_cover_bar = doc.add_paragraph()
-    _para_shade(p_cover_bar, "E85C1A")
-    _set_para_spacing(p_cover_bar, before_pt=0, after_pt=0)
-    p_cover_bar.paragraph_format.space_before = Pt(0)
-    r = p_cover_bar.add_run("  STANDARD OPERATING PROCEDURE")
-    _set_run_font(r, 13, bold=True, color=WHITE)
-
-    # Title
-    p_title = doc.add_paragraph()
-    _set_para_spacing(p_title, before_pt=24, after_pt=6)
-    r = p_title.add_run("{{ sop_title }}")
-    _set_run_font(r, 22, bold=True, color=DARK)
-
-    # Sub-line: process name
-    p_proc = doc.add_paragraph()
-    _set_para_spacing(p_proc, before_pt=0, after_pt=18)
-    r = p_proc.add_run("{{ process_name }}")
-    _set_run_font(r, 13, italic=True, color=ORANGE)
-
-    # Metadata table
-    tbl_meta = doc.add_table(rows=5, cols=2)
-    tbl_meta.style = "Table Grid"
-    _table_borders(tbl_meta)
-    tbl_meta.alignment = WD_TABLE_ALIGNMENT.LEFT
-    meta_rows = [
-        ("Client",        "{{ client_name }}"),
-        ("Process",       "{{ process_name }}"),
-        ("Meeting Date",  "{{ meeting_date }}"),
-        ("Generated",     "{{ generated_date }}"),
-        ("Total Steps",   "{{ step_count }}"),
-    ]
-    for i, (label, value) in enumerate(meta_rows):
-        row = tbl_meta.rows[i]
-        row.cells[0].width = Inches(1.8)
-        row.cells[1].width = Inches(3.5)
-        _set_cell_bg(row.cells[0], "F3F4F6")
-        p0 = row.cells[0].paragraphs[0]
-        r0 = p0.add_run(label)
-        _set_run_font(r0, 10, bold=True, color=DARK)
-        p1 = row.cells[1].paragraphs[0]
-        r1 = p1.add_run(value)
-        _set_run_font(r1, 10, color=DARK)
+    # Cover image is generated by Pillow in doc_renderer and injected via Jinja2
+    p_cover = doc.add_paragraph("{{ cover_page }}")
+    p_cover.style = "Normal"
+    p_cover.paragraph_format.space_before = Pt(0)
+    p_cover.paragraph_format.space_after = Pt(0)
 
     # Page break before TOC
     doc.add_page_break()
