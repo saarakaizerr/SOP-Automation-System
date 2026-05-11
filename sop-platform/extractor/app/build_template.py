@@ -30,7 +30,7 @@ BORDER   = RGBColor(0xD1, 0xD5, 0xDB)   # table border
 
 TEMPLATE_PATH = Path("/data/templates/sop_template.docx")
 _VERSION_PATH = TEMPLATE_PATH.with_suffix(".version")
-_TEMPLATE_VERSION = "4"  # increment when template structure changes
+_TEMPLATE_VERSION = "5"  # increment when template structure changes
 
 
 def _set_run_font(run, size_pt: float, bold=False, italic=False, color=None):
@@ -286,10 +286,17 @@ def build(force: bool = False):
     _set_para_spacing(p_sub, before_pt=0, after_pt=2)
     _ctrl_para(doc, "{%- endfor %}")
 
-    # Screenshot
-    p_ss = doc.add_paragraph("{%- if step.screenshot %}{{ step.screenshot }}{%- endif %}")
+    # Screenshot — control tags must be separate paragraphs for InlineImage to render
+    _ctrl_para(doc, "{%- if step.screenshot %}")
+    p_ss_label = doc.add_paragraph("Screenshot {{ step.sequence }}")
+    p_ss_label.style = "Normal"
+    for run in p_ss_label.runs:
+        _set_run_font(run, 9, italic=True, color=DARK)
+    _set_para_spacing(p_ss_label, before_pt=6, after_pt=2)
+    p_ss = doc.add_paragraph("{{ step.screenshot }}")
     p_ss.style = "Normal"
-    _set_para_spacing(p_ss, before_pt=4, after_pt=4)
+    _set_para_spacing(p_ss, before_pt=0, after_pt=8)
+    _ctrl_para(doc, "{%- endif %}")
 
     # Callouts
     _ctrl_para(doc, "{%- if step.callouts %}")
