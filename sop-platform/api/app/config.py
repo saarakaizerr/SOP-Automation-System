@@ -23,7 +23,7 @@ class Settings(BaseSettings):
     azure_blob_base_url: str = ""
     azure_blob_sas_token: str = ""
     # Services
-    extractor_url: str = "http://sop-extractor:8001"
+    extractor_url: str = "http://sop-extractor:8001"  # override with EXTRACTOR_URL env var on Azure: http://sop-extractor
     n8n_webhook_base_url: str = ""
     # Supabase auth — URL used to derive JWKS endpoint
     supabase_url: str = ""

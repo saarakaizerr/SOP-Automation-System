@@ -45,7 +45,7 @@ def _draw_highlight_boxes(img: Image.Image, boxes: list[dict]) -> Image.Image:
         x2, y2 = min(x + w, iw), min(y + h, ih)
         if x2 <= x or y2 <= y:
             continue
-        draw.rectangle([x, y, x2, y2], fill=(*rgb, 50), outline=(*rgb, 210), width=3)
+        draw.rectangle([x, y, x2, y2], fill=None, outline=(*rgb, 240), width=4)
     result = Image.alpha_composite(img_rgba, overlay)
     return result.convert('RGB')
 

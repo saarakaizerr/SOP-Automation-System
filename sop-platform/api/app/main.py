@@ -136,7 +136,7 @@ async def _run_extraction_job(job_id: str, body: _ExtractRequest) -> None:
     try:
         async with httpx.AsyncClient(timeout=600.0) as client:
             response = await client.post(
-                "http://sop-extractor:8001/extract",
+                f"{settings.extractor_url}/extract",
                 json=body.model_dump(),
             )
             response.raise_for_status()
@@ -190,7 +190,7 @@ async def _run_clip_job(job_id: str, body: _ClipRequest) -> None:
     try:
         async with httpx.AsyncClient(timeout=1800.0) as client:
             response = await client.post(
-                "http://sop-extractor:8001/clip",
+                f"{settings.extractor_url}/clip",
                 json=body.model_dump(),
             )
             response.raise_for_status()
@@ -238,7 +238,7 @@ async def proxy_probe_video(body: _ProbeVideoRequest) -> Any:
     """Synchronous proxy POST /api/probe-video → sop-extractor:8001/api/probe-video"""
     async with httpx.AsyncClient(timeout=120.0) as client:
         response = await client.post(
-            "http://sop-extractor:8001/api/probe-video",
+            f"{settings.extractor_url}/api/probe-video",
             json=body.model_dump(),
         )
         response.raise_for_status()
@@ -262,7 +262,7 @@ async def _run_split_job(job_id: str, body: _SplitVideoRequest) -> None:
         async with httpx.AsyncClient(timeout=3600.0) as client:
             # Submit to extractor (returns 202 + extractor_job_id immediately)
             response = await client.post(
-                "http://sop-extractor:8001/api/split-video",
+                f"{settings.extractor_url}/api/split-video",
                 json=body.model_dump(),
             )
             response.raise_for_status()
@@ -273,7 +273,7 @@ async def _run_split_job(job_id: str, body: _SplitVideoRequest) -> None:
                 await asyncio.sleep(30)
                 try:
                     st = await client.get(
-                        f"http://sop-extractor:8001/api/split-video/status/{extractor_job_id}",
+                        f"{settings.extractor_url}/api/split-video/status/{extractor_job_id}",
                         timeout=15.0,
                     )
                     data = st.json()
@@ -329,7 +329,7 @@ async def test_extractor() -> dict[str, Any]:
     """
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
-            response = await client.get("http://sop-extractor:8001/health")
+            response = await client.get(f"{settings.extractor_url}/health")
             response.raise_for_status()
             return {"status": "ok", "extractor": response.json()}
     except httpx.TimeoutException:

@@ -38,10 +38,10 @@ interface NaturalDims { w: number; h: number }
 interface StageDimensions { width: number; height: number }
 
 const BOX_COLORS = {
-  yellow: { fill: 'rgba(234,179,8,0.25)',  stroke: 'rgba(234,179,8,0.9)' },
-  red:    { fill: 'rgba(220,38,38,0.2)',   stroke: 'rgba(220,38,38,0.9)' },
-  green:  { fill: 'rgba(22,163,74,0.2)',   stroke: 'rgba(22,163,74,0.9)' },
-  blue:   { fill: 'rgba(59,130,246,0.2)',  stroke: 'rgba(59,130,246,0.9)' },
+  yellow: { fill: 'transparent', stroke: 'rgba(234,179,8,1.0)'  },
+  red:    { fill: 'transparent', stroke: 'rgba(220,38,38,1.0)'  },
+  green:  { fill: 'transparent', stroke: 'rgba(22,163,74,1.0)'  },
+  blue:   { fill: 'transparent', stroke: 'rgba(59,130,246,1.0)' },
 }
 
 function dotColor(c: LocalCallout): string {

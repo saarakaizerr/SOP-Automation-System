@@ -91,6 +91,14 @@ def extract_frames(
 
             img = Image.open(frame_path).convert("RGB")
             width, height = img.size
+
+            # Strip the Teams screen-share name badge (bottom ~40 px overlay)
+            _TEAMS_BADGE_PX = 40
+            if height > _TEAMS_BADGE_PX * 3:
+                img = img.crop((0, 0, width, height - _TEAMS_BADGE_PX))
+                img.save(frame_path)
+                width, height = img.size
+
             phash = imagehash.phash(img)
             img.close()
 

@@ -30,7 +30,11 @@ BORDER   = RGBColor(0xD1, 0xD5, 0xDB)   # table border
 
 TEMPLATE_PATH = Path("/data/templates/sop_template.docx")
 _VERSION_PATH = TEMPLATE_PATH.with_suffix(".version")
-_TEMPLATE_VERSION = "6"  # increment when template structure changes
+_TEMPLATE_VERSION = "12"  # increment when template structure changes
+
+_ASSETS_DIR = Path(__file__).parent / "assets"
+_HEADER_IMG = _ASSETS_DIR / "header.jpg"
+_FOOTER_IMG = _ASSETS_DIR / "footer.jpg"
 
 
 def _set_run_font(run, size_pt: float, bold=False, italic=False, color=None):
@@ -154,44 +158,47 @@ def _build_footer(section) -> None:
     footer = section.footer
     footer.is_linked_to_previous = False
 
-    # Reuse the default first paragraph as the orange rule (safer than removing it)
-    p_rule = footer.paragraphs[0]
-    p_rule.clear()
-    _para_shade(p_rule, "E85C1A")
-    _set_para_spacing(p_rule, before_pt=0, after_pt=3)
-    r = p_rule.add_run(" ")
-    _set_run_font(r, 3)
-
-    # URL line
-    p_url = footer.add_paragraph()
+    # URL line + right-aligned page number — reuse default first paragraph
+    p_url = footer.paragraphs[0]
+    p_url.clear()
     _set_para_spacing(p_url, before_pt=2, after_pt=0)
     r_url = p_url.add_run("https://www.infomateworld.com/")
     _set_run_font(r_url, 8, color=RGBColor(0x00, 0x00, 0xCC))
+    pPr_url = p_url._p.get_or_add_pPr()
+    tabs_url = OxmlElement("w:tabs")
+    tab_url = OxmlElement("w:tab")
+    tab_url.set(qn("w:val"), "right")
+    tab_url.set(qn("w:pos"), "9072")
+    tabs_url.append(tab_url)
+    pPr_url.append(tabs_url)
+    r_tab_url = p_url.add_run("\t")
+    _set_run_font(r_tab_url, 8)
+    r_pgnum = p_url.add_run("")
+    _set_run_font(r_pgnum, 8, color=DARK)
+    _add_page_number_to_run(r_pgnum)
 
-    # Address line + right-aligned page number
+    # Address line + right-aligned Infomate logo image
     p_addr = footer.add_paragraph()
     _set_para_spacing(p_addr, before_pt=0, after_pt=0)
     r_addr = p_addr.add_run("No 04, Leyden Bastian Street, Colombo 01, Sri Lanka")
     _set_run_font(r_addr, 8, color=DARK)
-    # Right-aligned tab stop at 16 cm (9072 twips) for page number
-    pPr = p_addr._p.get_or_add_pPr()
-    tabs = OxmlElement("w:tabs")
-    tab = OxmlElement("w:tab")
-    tab.set(qn("w:val"), "right")
-    tab.set(qn("w:pos"), "9072")
-    tabs.append(tab)
-    pPr.append(tabs)
-    r_tab = p_addr.add_run("\t")
-    _set_run_font(r_tab, 8)
-    r_pgnum = p_addr.add_run("")
-    _set_run_font(r_pgnum, 8, color=DARK)
-    _add_page_number_to_run(r_pgnum)
-
-    # Classification line
-    p_class = footer.add_paragraph()
-    _set_para_spacing(p_class, before_pt=0, after_pt=0)
-    r_class = p_class.add_run("CloudNavision - General")
-    _set_run_font(r_class, 8, color=DARK)
+    pPr_addr = p_addr._p.get_or_add_pPr()
+    tabs_addr = OxmlElement("w:tabs")
+    tab_addr = OxmlElement("w:tab")
+    tab_addr.set(qn("w:val"), "right")
+    tab_addr.set(qn("w:pos"), "9072")
+    tabs_addr.append(tab_addr)
+    pPr_addr.append(tabs_addr)
+    r_tab_addr = p_addr.add_run("\t")
+    _set_run_font(r_tab_addr, 8)
+    if _FOOTER_IMG.exists():
+        r_logo = p_addr.add_run()
+        r_logo.add_picture(str(_FOOTER_IMG), height=Inches(0.22))
+    else:
+        r_icon = p_addr.add_run("■")
+        _set_run_font(r_icon, 9, bold=True, color=ORANGE)
+        r_brand = p_addr.add_run("infomate")
+        _set_run_font(r_brand, 8, bold=True, color=DARK)
 
 
 def _build_header(section) -> None:
@@ -199,14 +206,33 @@ def _build_header(section) -> None:
     header = section.header
     header.is_linked_to_previous = False
 
-    # Right-aligned orange decoration bar (approximates the orange tab in the Infomate template)
     p_hdr = header.paragraphs[0]
     p_hdr.clear()
-    p_hdr.alignment = WD_ALIGN_PARAGRAPH.RIGHT
     _set_para_spacing(p_hdr, before_pt=0, after_pt=0)
-    _para_shade(p_hdr, "E85C1A")
-    r_hdr = p_hdr.add_run("  ")
-    _set_run_font(r_hdr, 4, color=WHITE)
+    p_hdr.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+    if _HEADER_IMG.exists():
+        run = p_hdr.add_run()
+        run.add_picture(str(_HEADER_IMG), height=Inches(0.45))
+    else:
+        # Fallback: orange bar
+        _para_shade(p_hdr, "E85C1A")
+        r_hdr = p_hdr.add_run("  ")
+        _set_run_font(r_hdr, 4, color=WHITE)
+
+    # Thin horizontal separator line below the header image
+    p_line = header.add_paragraph()
+    _set_para_spacing(p_line, before_pt=0, after_pt=0)
+    pPr_line = p_line._p.get_or_add_pPr()
+    pBdr = OxmlElement("w:pBdr")
+    bottom_b = OxmlElement("w:bottom")
+    bottom_b.set(qn("w:val"), "single")
+    bottom_b.set(qn("w:sz"), "6")
+    bottom_b.set(qn("w:space"), "1")
+    bottom_b.set(qn("w:color"), "AAAAAA")
+    pBdr.append(bottom_b)
+    pPr_line.append(pBdr)
+    r_line = p_line.add_run(" ")
+    _set_run_font(r_line, 1)
 
 
 def build(force: bool = False):
@@ -326,16 +352,17 @@ def build(force: bool = False):
     _set_para_spacing(p_sub, before_pt=0, after_pt=2)
     _ctrl_para(doc, "{%- endfor %}")
 
-    # Screenshot — control tags must be separate paragraphs for InlineImage to render
+    # Screenshot — image first, bold centered caption directly below
     _ctrl_para(doc, "{%- if step.screenshot %}")
-    p_ss_label = doc.add_paragraph("Screenshot {{ step.sequence }}")
-    p_ss_label.style = "Normal"
-    for run in p_ss_label.runs:
-        _set_run_font(run, 9, italic=True, color=DARK)
-    _set_para_spacing(p_ss_label, before_pt=6, after_pt=2)
     p_ss = doc.add_paragraph("{{ step.screenshot }}")
     p_ss.style = "Normal"
-    _set_para_spacing(p_ss, before_pt=0, after_pt=8)
+    _set_para_spacing(p_ss, before_pt=6, after_pt=2)
+    p_ss_label = doc.add_paragraph("Screenshot {{ step.sequence }}")
+    p_ss_label.style = "Normal"
+    p_ss_label.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    for run in p_ss_label.runs:
+        _set_run_font(run, 11, bold=True, color=DARK)
+    _set_para_spacing(p_ss_label, before_pt=0, after_pt=10)
     _ctrl_para(doc, "{%- endif %}")
 
     # Callouts

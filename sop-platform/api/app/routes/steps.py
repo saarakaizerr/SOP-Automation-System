@@ -423,7 +423,7 @@ async def render_annotated(
     }
 
     async with httpx.AsyncClient(timeout=30.0) as client:
-        resp = await client.post("http://sop-extractor:8001/api/render-annotated", json=payload)
+        resp = await client.post(f"{settings.extractor_url}/api/render-annotated", json=payload)
     if resp.status_code != 200:
         raise HTTPException(status_code=502, detail=f"Extractor error: {resp.text}")
 

@@ -40,51 +40,57 @@ const statusConfig: Record<SOPStatus, {
   dot: string
   hoverShadow: string
   hoverBorder: string
+  progressBar: string
 }> = {
   processing: {
     label: 'In Processing',
-    heroBg: 'bg-gradient-to-br from-violet-500/15 to-indigo-500/8',
+    heroBg: 'from-violet-500/10 to-indigo-500/5',
     borderLeft: 'border-l-violet-500',
     badge: 'bg-violet-500/15 text-violet-400 border-violet-500/25',
     dot: 'bg-violet-400 animate-pulse',
     hoverShadow: 'hover:shadow-violet-500/15',
     hoverBorder: 'hover:border-violet-500/40',
+    progressBar: 'from-violet-500 to-indigo-400',
   },
   draft: {
     label: 'Draft',
-    heroBg: 'bg-gradient-to-br from-amber-500/10 to-orange-500/5',
+    heroBg: 'from-amber-500/8 to-orange-500/4',
     borderLeft: 'border-l-amber-500',
     badge: 'bg-amber-500/15 text-amber-400 border-amber-500/25',
     dot: 'bg-amber-400',
     hoverShadow: 'hover:shadow-amber-400/10',
     hoverBorder: 'hover:border-amber-400/30',
+    progressBar: 'from-amber-500 to-orange-400',
   },
   in_review: {
     label: 'In Review',
-    heroBg: 'bg-gradient-to-br from-blue-500/15 to-cyan-500/8',
+    heroBg: 'from-blue-500/10 to-cyan-500/5',
     borderLeft: 'border-l-blue-500',
     badge: 'bg-blue-500/15 text-blue-400 border-blue-500/25',
     dot: 'bg-blue-400',
     hoverShadow: 'hover:shadow-blue-500/15',
     hoverBorder: 'hover:border-blue-500/40',
+    progressBar: 'from-blue-500 to-cyan-400',
   },
   published: {
     label: 'Published',
-    heroBg: 'bg-gradient-to-br from-emerald-500/15 to-teal-500/8',
+    heroBg: 'from-emerald-500/10 to-teal-500/5',
     borderLeft: 'border-l-emerald-500',
     badge: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/25',
     dot: 'bg-emerald-400',
     hoverShadow: 'hover:shadow-emerald-500/15',
     hoverBorder: 'hover:border-emerald-500/40',
+    progressBar: 'from-emerald-500 to-teal-400',
   },
   archived: {
     label: 'Archived',
-    heroBg: 'bg-gradient-to-br from-gray-500/10 to-gray-600/5',
+    heroBg: 'from-gray-500/8 to-gray-600/4',
     borderLeft: 'border-l-gray-500',
     badge: 'bg-raised text-muted border-default',
     dot: 'bg-gray-400',
     hoverShadow: 'hover:shadow-gray-400/10',
     hoverBorder: 'hover:border-gray-400/20',
+    progressBar: 'from-gray-400 to-gray-500',
   },
 }
 
@@ -202,39 +208,66 @@ export function SOPCard({ sop }: Props) {
         cfg.borderLeft, cfg.hoverBorder, cfg.hoverShadow,
       )}
     >
-      {/* ── Header ────────────────────────────────────────────── */}
-      <div className="px-5 pt-4 pb-4 flex items-start gap-3">
+      {/* ── Pipeline progress strip (top edge, visible for processing SOPs) ── */}
+      {isPipelineRunning && (
+        <div className="h-0.5 w-full bg-violet-500/15 shrink-0">
+          <div
+            className={clsx('h-full bg-gradient-to-r transition-all duration-700 ease-out', cfg.progressBar)}
+            style={{ width: `${pipelinePct}%` }}
+          />
+        </div>
+      )}
+
+      {/* ── Header (coloured hero gradient background) ─────────────────────── */}
+      <div className={clsx(
+        'px-5 pt-4 pb-3 flex items-start gap-3 bg-gradient-to-br shrink-0',
+        cfg.heroBg,
+      )}>
+        {/* Avatar / pipeline ring */}
         {isPipelineRunning ? (
-          <div className="relative shrink-0 w-12 h-12 mt-0.5">
-            <svg className="absolute inset-0 w-12 h-12 -rotate-90" viewBox="0 0 48 48"
-              style={{ filter: 'drop-shadow(0 0 5px rgba(139,92,246,0.5))' }}>
-              <circle cx="24" cy="24" r="21" fill="none" strokeWidth="4" stroke="rgba(139,92,246,0.15)" />
-              <circle cx="24" cy="24" r="21" fill="none" strokeWidth="4" stroke="url(#ring-grad)"
-                strokeDasharray={ringCirc} strokeDashoffset={ringOffset}
-                strokeLinecap="round" style={{ transition: 'stroke-dashoffset 0.7s ease' }} />
-              <defs>
-                <linearGradient id="ring-grad" x1="0%" y1="0%" x2="100%" y2="0%">
-                  <stop offset="0%" stopColor="#8b5cf6" />
-                  <stop offset="100%" stopColor="#6366f1" />
-                </linearGradient>
-              </defs>
-            </svg>
-            <div className={clsx(
-              'absolute top-1 left-1 w-10 h-10 rounded-full flex items-center justify-center',
-              'text-white text-xs font-bold bg-gradient-to-br shadow-md', grad,
-            )}>
-              <Initials name={displayName} />
+          <div className="shrink-0 flex flex-col items-center gap-0.5 mt-0.5">
+            <div className="relative w-12 h-12">
+              <svg
+                className="absolute inset-0 w-12 h-12 -rotate-90"
+                viewBox="0 0 48 48"
+                style={{ filter: 'drop-shadow(0 0 5px rgba(139,92,246,0.5))' }}
+              >
+                <circle cx="24" cy="24" r="21" fill="none" strokeWidth="4" stroke="rgba(139,92,246,0.15)" />
+                <circle
+                  cx="24" cy="24" r="21" fill="none" strokeWidth="4" stroke="url(#ring-grad)"
+                  strokeDasharray={ringCirc} strokeDashoffset={ringOffset}
+                  strokeLinecap="round" style={{ transition: 'stroke-dashoffset 0.7s ease' }}
+                />
+                <defs>
+                  <linearGradient id="ring-grad" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" stopColor="#8b5cf6" />
+                    <stop offset="100%" stopColor="#6366f1" />
+                  </linearGradient>
+                </defs>
+              </svg>
+              <div className={clsx(
+                'absolute top-1 left-1 w-10 h-10 rounded-full flex items-center justify-center',
+                'text-white text-xs font-bold bg-gradient-to-br shadow-md', grad,
+              )}>
+                <Initials name={displayName} />
+              </div>
             </div>
+            {/* Stage label */}
+            <span className="text-[9px] text-violet-400 font-medium text-center leading-tight max-w-[52px] truncate">
+              {(sop.pipeline_status || '').replace(/_/g, ' ')}
+            </span>
           </div>
         ) : (
           <div className={clsx(
-            'shrink-0 w-10 h-10 rounded-full flex items-center justify-center',
-            'text-white text-xs font-bold shadow-md bg-gradient-to-br mt-0.5',
+            'shrink-0 w-10 h-10 rounded-full flex items-center justify-center mt-0.5',
+            'text-white text-xs font-bold shadow-md bg-gradient-to-br',
             'transition-transform duration-200 group-hover:scale-105', grad,
           )}>
             <Initials name={displayName} />
           </div>
         )}
+
+        {/* Title + status */}
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-2">
             <h3 className="text-sm font-semibold text-default leading-snug line-clamp-2 flex-1">
@@ -252,6 +285,8 @@ export function SOPCard({ sop }: Props) {
             <p className="text-xs text-muted mt-1 truncate">{sop.client_name}</p>
           )}
         </div>
+
+        {/* Chevron */}
         <svg
           className="shrink-0 w-4 h-4 text-muted opacity-30 group-hover:opacity-60 group-hover:translate-x-0.5 transition-all mt-1"
           fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}
@@ -260,26 +295,21 @@ export function SOPCard({ sop }: Props) {
         </svg>
       </div>
 
-      {/* ── Footer ────────────────────────────────────────────── */}
-      <div className="mt-auto px-5 pb-4 pt-3 border-t border-subtle" onClick={e => e.stopPropagation()}>
-        {sop.pipeline_status === 'failed' && (
-          <div className="mb-3 flex items-center gap-2 text-xs text-red-500 font-medium bg-red-500/5 border border-red-500/20 rounded-lg px-3 py-2">
-            <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
-            </svg>
-            Pipeline failed — please re-process
-          </div>
-        )}
-
-        {/* Tags */}
+      {/* ── Tags — flex-1 fills remaining space so footer border-t stays aligned ── */}
+      <div className="flex-1 px-5 py-3" onClick={e => e.stopPropagation()}>
         {(tags.length > 0 || canEdit) && (
-          <div className="flex flex-wrap gap-1.5 items-center mb-3">
+          <div className="flex flex-wrap gap-1.5 items-center">
             {tags.map(tag => (
-              <span key={tag.name}
-                className={clsx('inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border font-medium', tagClasses(tag.color))}>
+              <span
+                key={tag.name}
+                className={clsx('inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border font-medium', tagClasses(tag.color))}
+              >
                 {canEdit && (
-                  <button title="Change colour" onClick={e => cycleColor(tag.name, e)}
-                    className={clsx('w-2.5 h-2.5 rounded-full shrink-0 hover:scale-125 transition-transform', TAG_DOT_MAP[tag.color] ?? 'bg-blue-400')} />
+                  <button
+                    title="Change colour"
+                    onClick={e => cycleColor(tag.name, e)}
+                    className={clsx('w-2.5 h-2.5 rounded-full shrink-0 hover:scale-125 transition-transform', TAG_DOT_MAP[tag.color] ?? 'bg-blue-400')}
+                  />
                 )}
                 {tag.name}
                 {canEdit && (
@@ -287,16 +317,22 @@ export function SOPCard({ sop }: Props) {
                 )}
               </span>
             ))}
+
             {canEdit && (
               addingTag ? (
-                <div className="w-full mt-1 p-3 bg-raised border border-default rounded-xl shadow-lg" onClick={e => e.stopPropagation()}>
+                <div
+                  className="w-full mt-1 p-3 bg-raised border border-default rounded-xl shadow-lg"
+                  onClick={e => e.stopPropagation()}
+                >
                   <div className="mb-2.5">
                     <span className={clsx('inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full border font-medium', tagClasses(tagColor))}>
                       <span className={clsx('w-2 h-2 rounded-full', TAG_DOT_MAP[tagColor])} />
                       {tagInput.trim() || 'preview'}
                     </span>
                   </div>
-                  <input ref={tagInputRef} value={tagInput}
+                  <input
+                    ref={tagInputRef}
+                    value={tagInput}
                     onChange={e => setTagInput(e.target.value)}
                     onKeyDown={e => {
                       if (e.key === 'Enter') { e.preventDefault(); commitTag() }
@@ -307,28 +343,50 @@ export function SOPCard({ sop }: Props) {
                   />
                   <div className="flex gap-1.5 mb-3">
                     {TAG_COLOR_KEYS.map(c => (
-                      <button key={c} onClick={e => { e.stopPropagation(); setTagColor(c) }} title={c}
-                        className={clsx('w-5 h-5 rounded-full transition-all hover:scale-110', TAG_DOT_MAP[c], tagColor === c ? 'ring-2 ring-offset-1 ring-current scale-110' : 'opacity-50 hover:opacity-100')} />
+                      <button
+                        key={c}
+                        onClick={e => { e.stopPropagation(); setTagColor(c) }}
+                        title={c}
+                        className={clsx('w-5 h-5 rounded-full transition-all hover:scale-110', TAG_DOT_MAP[c], tagColor === c ? 'ring-2 ring-offset-1 ring-current scale-110' : 'opacity-50 hover:opacity-100')}
+                      />
                     ))}
                   </div>
                   <div className="flex gap-1.5">
-                    <button onClick={e => { e.stopPropagation(); commitTag() }} disabled={!tagInput.trim()}
-                      className="flex-1 text-xs py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-40 font-medium transition-colors">Add tag</button>
-                    <button onClick={e => { e.stopPropagation(); setAddingTag(false); setTagInput(''); setTagColor('blue') }}
-                      className="text-xs px-3 py-1.5 border border-default rounded-lg text-muted hover:bg-raised transition-colors">Cancel</button>
+                    <button
+                      onClick={e => { e.stopPropagation(); commitTag() }}
+                      disabled={!tagInput.trim()}
+                      className="flex-1 text-xs py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-40 font-medium transition-colors"
+                    >Add tag</button>
+                    <button
+                      onClick={e => { e.stopPropagation(); setAddingTag(false); setTagInput(''); setTagColor('blue') }}
+                      className="text-xs px-3 py-1.5 border border-default rounded-lg text-muted hover:bg-raised transition-colors"
+                    >Cancel</button>
                   </div>
                 </div>
               ) : (
-                <button onClick={openTagInput}
-                  className="text-xs px-2.5 py-1 border border-dashed border-default rounded-full text-muted hover:border-blue-400/50 hover:text-blue-400 transition-all">
+                <button
+                  onClick={openTagInput}
+                  className="text-xs px-2.5 py-1 border border-dashed border-default rounded-full text-muted hover:border-blue-400/50 hover:text-blue-400 transition-all"
+                >
                   + Add tag
                 </button>
               )
             )}
           </div>
         )}
+      </div>
 
-        {/* Meta + actions */}
+      {/* ── Footer — shrink-0 + border-t ensures consistent alignment across rows ── */}
+      <div className="shrink-0 px-5 pb-4 pt-3 border-t border-subtle" onClick={e => e.stopPropagation()}>
+        {sop.pipeline_status === 'failed' && (
+          <div className="mb-3 flex items-center gap-2 text-xs text-red-500 font-medium bg-red-500/5 border border-red-500/20 rounded-lg px-3 py-2">
+            <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+            </svg>
+            Pipeline failed — please re-process
+          </div>
+        )}
+
         <div className="flex items-center justify-between gap-2">
           {!confirming ? (
             <>
@@ -369,8 +427,10 @@ export function SOPCard({ sop }: Props) {
                       </svg>
                     </button>
                     {menuOpen && (
-                      <div className="absolute right-0 bottom-full mb-1.5 z-20 bg-card border border-default rounded-xl shadow-xl overflow-hidden min-w-[140px]"
-                        onClick={e => e.stopPropagation()}>
+                      <div
+                        className="absolute right-0 bottom-full mb-1.5 z-20 bg-card border border-default rounded-xl shadow-xl overflow-hidden min-w-[140px]"
+                        onClick={e => e.stopPropagation()}
+                      >
                         <button
                           onClick={e => { e.stopPropagation(); setMenuOpen(false); setConfirming(true) }}
                           className="w-full text-left text-xs px-3 py-2.5 text-red-400 hover:bg-red-500/10 transition-colors flex items-center gap-2"
@@ -390,11 +450,15 @@ export function SOPCard({ sop }: Props) {
             <>
               <span className="text-xs text-muted">Delete this SOP?</span>
               <div className="flex items-center gap-1.5">
-                <button onClick={e => { e.stopPropagation(); setConfirming(false) }}
-                  className="text-xs px-2.5 py-1.5 border border-default rounded-lg text-muted hover:bg-raised transition-colors">Cancel</button>
-                <button onClick={e => { e.stopPropagation(); deleteMutation.mutate() }}
+                <button
+                  onClick={e => { e.stopPropagation(); setConfirming(false) }}
+                  className="text-xs px-2.5 py-1.5 border border-default rounded-lg text-muted hover:bg-raised transition-colors"
+                >Cancel</button>
+                <button
+                  onClick={e => { e.stopPropagation(); deleteMutation.mutate() }}
                   disabled={deleteMutation.isPending}
-                  className="text-xs px-2.5 py-1.5 bg-red-500 text-white rounded-lg hover:bg-red-600 active:scale-95 transition-all font-medium disabled:opacity-60">
+                  className="text-xs px-2.5 py-1.5 bg-red-500 text-white rounded-lg hover:bg-red-600 active:scale-95 transition-all font-medium disabled:opacity-60"
+                >
                   {deleteMutation.isPending ? 'Deleting…' : 'Delete'}
                 </button>
               </div>

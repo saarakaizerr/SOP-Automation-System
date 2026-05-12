@@ -434,6 +434,9 @@ def _build_context(tpl: DocxTemplate, sop_data: dict, tmp_dir: Path, table_regis
     }
 
 
+_COVER_TEMPLATE = Path(__file__).parent / "assets" / "cover_template.jpg"
+
+
 def _generate_cover_page(
     tpl: DocxTemplate,
     sop_data: dict,
@@ -441,55 +444,37 @@ def _generate_cover_page(
     today: str,
 ) -> Optional[InlineImage]:
     """
-    Generate the Infomate-branded cover page as a PNG and return as InlineImage.
-    Matches the Aged Debtor Process PDF template style:
-      - White left panel (~38 % of width) with Infomate logo
-      - Dark blue-purple right panel with gradient, title, date, Starboard Hotels logo
-      - Orange decorative lines at top and bottom
-    Image is sized to the A4 text area (16 cm × 24.7 cm at 200 DPI).
+    Load the static Infomate cover template and overlay SOP title + date
+    in the gradient area to the right of the white panel.
+    Falls back to a fully-generated cover if the template file is missing.
+    Image is output to A4 text area width (6.3 inches).
     """
     try:
         from PIL import Image, ImageDraw, ImageFont
 
-        # A4 text area at 200 DPI: (21-3-2)cm × (29.7-2.5-2.5)cm = 16 × 24.7 cm
-        W, H = 1260, 1944
+        # ── Load base template (or fall back to generated version) ───────────
+        if _COVER_TEMPLATE.exists():
+            img = Image.open(str(_COVER_TEMPLATE)).convert("RGB")
+            img = img.resize((1260, 1944), Image.LANCZOS)
+        else:
+            logger.warning("Cover template not found at %s — using generated fallback", _COVER_TEMPLATE)
+            img = _build_cover_base()
 
-        WHITE      = (255, 255, 255)
-        ORANGE     = (232, 92, 26)
-        TEXT_WHITE = (255, 255, 255)
-        TEXT_DIM   = (210, 208, 228)   # slightly dimmed white for secondary text
-        TEXT_DARK  = (26, 26, 46)
-
-        split_x = int(W * 0.38)          # left white panel width
-
-        img  = Image.new("RGB", (W, H), WHITE)
+        W, H = img.size
         draw = ImageDraw.Draw(img)
 
-        # Blue-purple gradient for right panel (top → bottom darkens slightly)
-        for y in range(H):
-            ratio = y / H
-            r = int(72 + ratio * 18)
-            g = int(71 + ratio * 8)
-            b = int(119 + ratio * 18)
-            draw.line([(split_x, y), (W, y)], fill=(r, g, b))
+        ORANGE   = (232, 92, 26)
+        TEXT_DIM = (215, 213, 235)
 
-        # Thin vertical separator between panels
-        draw.line([(split_x, 0), (split_x, H)], fill=(200, 198, 220), width=1)
+        split_x  = int(W * 0.38)   # right edge of the white panel
+        right_pad = split_x + 40   # left margin for gradient-area text
 
-        # Orange decorative lines at very top and very bottom
-        draw.rectangle([(0, 0), (W, 6)], fill=ORANGE)
-        draw.rectangle([(0, H - 6), (W, H)], fill=ORANGE)
-
-        # Fonts
+        # ── Fonts ─────────────────────────────────────────────────────────────
         try:
-            fnt_tiny   = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",         26)
-            fnt_small  = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",         30)
-            fnt_bold   = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",    36)
-            fnt_italic = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Oblique.ttf", 28)
-            fnt_title  = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",    68)
-            fnt_logo   = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",    42)
+            fnt_italic = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Oblique.ttf", 26)
+            fnt_title  = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",    64)
         except Exception:
-            fnt_tiny = fnt_small = fnt_bold = fnt_italic = fnt_title = fnt_logo = ImageFont.load_default()
+            fnt_italic = fnt_title = ImageFont.load_default()
 
         def _bb(text, font):
             bb = draw.textbbox((0, 0), text, font=font)
@@ -509,70 +494,19 @@ def _generate_cover_page(
                 lines.append(cur)
             return lines
 
-        # ── Right panel content ───────────────────────────────────────────────
-
-        # "A John Keells Company" top right
-        jk_text = "A John Keells Company"
-        jk_w, _ = _bb(jk_text, fnt_small)
-        draw.text((W - jk_w - 30, 20), jk_text, font=fnt_small, fill=TEXT_WHITE)
-
-        # Horizontal rule below company line
-        draw.line([(split_x + 20, 75), (W - 20, 75)], fill=(150, 148, 190), width=1)
-
-        # SOP Title (large, orange)
-        title = f"SOP: {sop_data.get('sop_title', 'Standard Operating Procedure')}"
-        right_w = W - split_x - 60
-        title_lines = _wrap(title, fnt_title, right_w)
-        title_y = int(H * 0.40)
+        # ── SOP title (orange, large) overlaid on gradient area ───────────────
+        title_raw = sop_data.get("sop_title") or "Standard Operating Procedure"
+        title_lines = _wrap(f"SOP: {title_raw}", fnt_title, W - right_pad - 50)
+        title_y = int(H * 0.36)
         for i, line in enumerate(title_lines):
-            draw.text((split_x + 30, title_y + i * 88), line, font=fnt_title, fill=ORANGE)
+            draw.text((right_pad, title_y + i * 84), line, font=fnt_title, fill=ORANGE)
 
-        # Date (italic, below title)
-        date_str = sop_data.get("meeting_date") or today
-        if date_str:
-            draw.text(
-                (split_x + 30, title_y + len(title_lines) * 88 + 20),
-                str(date_str),
-                font=fnt_italic,
-                fill=TEXT_DIM,
-            )
-
-        # Starboard Hotels logo (bottom of right panel)
-        sb_x = split_x + 30
-        sb_y = H - 300
-        cr = 52   # circle radius
-
-        # Outer ring
-        draw.ellipse([(sb_x, sb_y), (sb_x + cr * 2, sb_y + cr * 2)], outline=WHITE, width=3)
-
-        # Anchor inside circle
-        ax, ay = sb_x + cr, sb_y + cr
-        draw.line([(ax, ay - 32), (ax, ay + 32)], fill=WHITE, width=3)       # staff
-        draw.ellipse([(ax - 10, ay - 40), (ax + 10, ay - 22)], outline=WHITE, width=2)   # ring
-        draw.line([(ax - 26, ay - 12), (ax + 26, ay - 12)], fill=WHITE, width=3)         # crossbar
-        draw.ellipse([(ax - 30, ay - 16), (ax - 22, ay - 8)], fill=WHITE)                # left cap
-        draw.ellipse([(ax + 22, ay - 16), (ax + 30, ay - 8)], fill=WHITE)                # right cap
-        draw.line([(ax - 24, ay + 18), (ax, ay + 32)], fill=WHITE, width=2)              # left fluke
-        draw.line([(ax + 24, ay + 18), (ax, ay + 32)], fill=WHITE, width=2)              # right fluke
-
-        # Hotel name text
-        tx = sb_x + cr * 2 + 20
-        draw.text((tx, sb_y + 12), "STARBOARD", font=fnt_bold, fill=TEXT_WHITE)
-        draw.text((tx, sb_y + 55), "HOTELS",    font=fnt_bold, fill=TEXT_WHITE)
-
-        # "2018 Infomate Private Limited" bottom right
-        copy_text = "2018 Infomate Private Limited"
-        copy_w, _ = _bb(copy_text, fnt_tiny)
-        draw.text((W - copy_w - 30, H - 50), copy_text, font=fnt_tiny, fill=TEXT_DIM)
-
-        # ── Left white panel content ──────────────────────────────────────────
-
-        # Infomate logo (orange square + "infomate" text), bottom of white panel
-        logo_y = H - 280
-        sq = 50
-        logo_x = 40
-        draw.rectangle([(logo_x, logo_y), (logo_x + sq, logo_y + sq)], fill=ORANGE)
-        draw.text((logo_x + sq + 12, logo_y + 7), "infomate", font=fnt_logo, fill=(80, 80, 80))
+        # ── Date below title ──────────────────────────────────────────────────
+        date_str = str(sop_data.get("meeting_date") or today)
+        draw.text(
+            (right_pad, title_y + len(title_lines) * 84 + 18),
+            date_str, font=fnt_italic, fill=TEXT_DIM,
+        )
 
         cover_path = tmp_dir / "cover_page.jpg"
         img.save(str(cover_path), "JPEG", quality=95, optimize=True)
@@ -581,6 +515,66 @@ def _generate_cover_page(
     except Exception as exc:
         logger.warning("Cover page generation failed: %s", exc)
         return None
+
+
+def _build_cover_base() -> "Image.Image":
+    """Build the Infomate cover template with Pillow (used when cover_template.jpg is absent)."""
+    from PIL import Image, ImageDraw, ImageFont
+
+    W, H = 1260, 1944
+    WHITE  = (255, 255, 255)
+    ORANGE = (232, 92, 26)
+    SHADOW = (68, 64, 108)
+    TEXT_DIM = (215, 213, 235)
+    TEXT_MID = (175, 172, 205)
+
+    split_x   = int(W * 0.38)
+    panel_top = 120
+    panel_bot = int(H * 0.71)
+
+    img  = Image.new("RGB", (W, H), WHITE)
+    draw = ImageDraw.Draw(img)
+
+    for y in range(H):
+        t = y / H
+        draw.line([(0, y), (W, y)], fill=(int(118 - t * 32), int(120 - t * 36), int(166 - t * 26)))
+
+    draw.rectangle([(9, panel_top + 10), (split_x + 9, panel_bot + 10)], fill=SHADOW)
+
+    dec = 132
+    draw.rounded_rectangle(
+        [(split_x - dec // 2, panel_top - dec // 2), (split_x + dec // 2, panel_top + dec // 2)],
+        radius=30, fill=ORANGE,
+    )
+    draw.rectangle([(0, panel_top), (split_x, panel_bot)], fill=WHITE)
+
+    try:
+        fnt_tiny  = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",      24)
+        fnt_small = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",      28)
+        fnt_logo  = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 40)
+    except Exception:
+        fnt_tiny = fnt_small = fnt_logo = ImageFont.load_default()
+
+    def _bb(text, font):
+        bb = draw.textbbox((0, 0), text, font=font)
+        return bb[2] - bb[0], bb[3] - bb[1]
+
+    right_pad = split_x + 40
+    jk_text = "A John Keells Company"
+    jk_w, _ = _bb(jk_text, fnt_small)
+    draw.text((W - jk_w - 30, 22), jk_text, font=fnt_small, fill=TEXT_DIM)
+    draw.line([(right_pad, 72), (W - 20, 72)], fill=TEXT_MID, width=1)
+    draw.line([(right_pad, H - 78), (W - 20, H - 78)], fill=TEXT_MID, width=1)
+    copy_text = "2018 Infomate Private Limited"
+    copy_w, _ = _bb(copy_text, fnt_tiny)
+    draw.text((W - copy_w - 30, H - 60), copy_text, font=fnt_tiny, fill=TEXT_DIM)
+    draw.rectangle([(W - 85, H - 48), (W, H)], fill=WHITE)
+
+    logo_y = panel_bot - 118
+    draw.rounded_rectangle([(42, logo_y), (90, logo_y + 48)], radius=11, fill=ORANGE)
+    draw.text((106, logo_y + 4), "infomate", font=fnt_logo, fill=(65, 65, 75))
+
+    return img
 
 
 def _download_inline_image(
