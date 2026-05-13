@@ -600,9 +600,9 @@ def _build_cover_base() -> "Image.Image":
 
 def _crop_taskbar(img: "PILImage.Image") -> "PILImage.Image":
     """
-    Detect and remove the Windows taskbar (or any bottom OS chrome) from a screenshot.
-    Analyses brightness transitions in the bottom 15 % of the image; if a clear
-    horizontal boundary is found inside the bottom 12 %, the image is cropped there.
+    Detect and remove OS chrome (title bar at top + taskbar at bottom) from screenshots.
+    Uses row-mean brightness transitions; only crops when the boundary is clearly in the
+    expected OS-chrome zone (top 8 % / bottom 12 %) to avoid touching content.
     """
     try:
         import numpy as np
@@ -611,24 +611,40 @@ def _crop_taskbar(img: "PILImage.Image") -> "PILImage.Image":
         if h < 300:
             return img
 
-        # Analyse bottom 15 % (capped at 120 px — covers all common taskbar heights)
+        arr = np.array(img.convert("L"))   # greyscale (h, w)
+
+        # ── Bottom taskbar ────────────────────────────────────────────────
         check_h = min(120, max(40, h * 15 // 100))
-        arr = np.array(img.convert("L"))          # greyscale, shape (h, w)
-        bottom = arr[h - check_h:, :]             # shape (check_h, w)
+        bottom = arr[h - check_h:, :]
+        row_means_b = bottom.mean(axis=1)
+        diffs_b = np.abs(np.diff(row_means_b))
+        threshold_b = max(8.0, float(diffs_b.std()) * 1.0)
+        jumps_b = np.where(diffs_b > threshold_b)[0]
+        crop_bottom = h
+        if jumps_b.size > 0:
+            boundary_y = h - check_h + int(jumps_b[0]) + 1
+            if boundary_y >= h * 0.88:
+                crop_bottom = boundary_y
 
-        row_means = bottom.mean(axis=1)           # mean brightness per row
-        diffs = np.abs(np.diff(row_means))        # row-to-row absolute change
+        # ── Top title bar ─────────────────────────────────────────────────
+        # Title bars are a uniform dark band in the top ~8 %
+        check_top = min(100, max(20, h * 8 // 100))
+        top = arr[:check_top, :]
+        row_means_t = top.mean(axis=1)
+        diffs_t = np.abs(np.diff(row_means_t))
+        threshold_t = max(10.0, float(diffs_t.std()) * 1.2)
+        jumps_t = np.where(diffs_t > threshold_t)[0]
+        crop_top = 0
+        if jumps_t.size > 0:
+            # Take the LAST jump — bottom edge of the title bar
+            candidate = int(jumps_t[-1]) + 1
+            if candidate <= h * 0.08:
+                # Only crop if that band is actually dark (mean brightness < 80)
+                if row_means_t[:candidate].mean() < 80:
+                    crop_top = candidate
 
-        # Threshold: either a fixed floor or half the local std — whichever is larger
-        threshold = max(8.0, float(diffs.std()) * 1.0)
-        jump_indices = np.where(diffs > threshold)[0]
-
-        if jump_indices.size > 0:
-            # Take the topmost qualifying jump (first entry from the top of check_h)
-            boundary_in_check = int(jump_indices[0])
-            boundary_y = h - check_h + boundary_in_check + 1
-            if boundary_y >= h * 0.88:            # must be in bottom 12 %
-                return img.crop((0, 0, w, boundary_y))
+        if crop_top > 0 or crop_bottom < h:
+            return img.crop((0, crop_top, w, crop_bottom))
     except Exception:
         pass  # never break the render over a crop heuristic
     return img
