@@ -15,13 +15,12 @@ from PIL import Image, ImageDraw, ImageFont
 
 logger = logging.getLogger(__name__)
 
-# Styling — matches the editor's green pentagon badge (ocr_exact default)
-BADGE_FILL  = (16, 185, 129)    # green (#10b981) — matches ocr_exact callout colour
-BADGE_TEXT  = (255, 255, 255)   # white number
-BADGE_W     = 38                # badge width (px at render resolution)
-BADGE_H     = 28                # badge height
-BADGE_TIP   = 13                # arrow tip extension
-FONT_SIZE   = 15
+# Badge base dimensions (canvas px — matches the editor's Konva shape exactly)
+# Main pentagon:      w=38  h=28  tip=13
+# Highlight pentagon: w=46  h=34  tip=12  (white fill, blue border — active/selected state)
+BADGE_TEXT   = (255, 255, 255)
+BADGE_HL_CLR = (59, 130, 246)    # blue #3b82f6 — selection indicator border
+FONT_SIZE    = 12                # matches editor fontSize=12
 
 BOX_COLOR_MAP = {
     'yellow': (234, 179, 8),
@@ -51,11 +50,47 @@ def _draw_highlight_boxes(img: Image.Image, boxes: list[dict]) -> Image.Image:
 
 
 def _rotate_pt(px: float, py: float, cx: float, cy: float, angle_deg: float):
-    """Rotate point (px, py) around centre (cx, cy) by angle_deg degrees."""
     rad = math.radians(angle_deg)
     cos_a, sin_a = math.cos(rad), math.sin(rad)
     dx, dy = px - cx, py - cy
     return cx + dx * cos_a - dy * sin_a, cy + dx * sin_a + dy * cos_a
+
+
+def _badge_scale(img_w: int, img_h: int) -> float:
+    """
+    Scale badge so it appears the same relative size as in the editor.
+    The editor renders badges at 38×28 canvas px on a stage that is roughly
+    img_width/2.28 wide (for a typical 1920 px screen recording displayed in
+    an ~840 px canvas panel).  We reproduce that ratio using image dimensions.
+    """
+    return max(1.0, min(img_w, img_h) / 474)
+
+
+def _pentagon_pts(
+    cx: float, cy: float,
+    w: float, h: float, tip: float,
+    scale: float, rotation: float,
+) -> list[tuple[float, float]]:
+    """Return scaled + rotated pentagon vertices centred at (cx, cy)."""
+    hw, hh, t = w * scale / 2, h * scale / 2, tip * scale
+    raw = [
+        (cx - hw,         cy - hh),
+        (cx + hw - t,     cy - hh),
+        (cx + hw,         cy),
+        (cx + hw - t,     cy + hh),
+        (cx - hw,         cy + hh),
+    ]
+    if rotation:
+        return [_rotate_pt(px, py, cx, cy, rotation) for px, py in raw]
+    return raw
+
+
+def _callout_fill(confidence: str | None, was_repositioned: bool) -> tuple[int, int, int]:
+    if was_repositioned:
+        return (59, 130, 246)    # blue  — repositioned
+    if confidence in ('ocr_exact', 'ocr_fuzzy'):
+        return (16, 185, 129)    # green — ocr match
+    return (245, 158, 11)        # amber — gemini
 
 
 def _draw_callout(
@@ -65,47 +100,54 @@ def _draw_callout(
     cy: int,
     number: int,
     rotation: float = 0.0,
+    confidence: str | None = None,
+    was_repositioned: bool = False,
 ) -> None:
     """
-    Draw a rotated pentagon/arrow badge at (cx, cy) — matches the editor canvas shape.
-    rotation is in degrees (0 = arrow points right, 90 = down, 180 = left, 270 = up).
+    Draw a callout badge matching the editor's visual exactly:
+    1. Highlight pentagon (white fill, blue border) — replicates the selected state
+    2. Main pentagon on top (colour based on confidence)
+    3. White bold number centred in the badge
+    Sizes are scaled to match the editor's canvas-to-image ratio.
     """
     iw, ih = img.size
-    hw = BADGE_W // 2
-    hh = BADGE_H // 2
-    tip = BADGE_TIP
+    scale = _badge_scale(iw, ih)
 
-    # Clamp centre so badge stays inside image
-    bx = float(min(max(hw + 2, cx), iw - hw - 2))
-    by = float(min(max(hh + 2, cy), ih - hh - 2))
+    # Clamp centre so the badge stays inside the image
+    margin = int(25 * scale)
+    bx = float(min(max(margin, cx), iw - margin))
+    by = float(min(max(margin, cy), ih - margin))
 
-    # Pentagon vertices centred on (bx, by), arrow tip points right at 0°
-    raw_pts = [
-        (bx - hw,         by - hh),
-        (bx + hw - tip,   by - hh),
-        (bx + hw,         by),
-        (bx + hw - tip,   by + hh),
-        (bx - hw,         by + hh),
-    ]
-    pts = [_rotate_pt(px, py, bx, by, rotation) for px, py in raw_pts]
-    draw.polygon(pts, fill=BADGE_FILL)
+    # 1 — Highlight (active selection style): w=46 h=34 tip=12, white fill, blue border
+    hl_pts = _pentagon_pts(bx, by, 46, 34, 12, scale, rotation)
+    border_w = max(2, int(3 * scale))
+    draw.polygon(hl_pts, fill=(255, 255, 255), outline=BADGE_HL_CLR, width=border_w)
 
-    # Number centred at (bx, by), also rotated — use a small sub-image for text rotation
+    # 2 — Main pentagon: w=38 h=28 tip=13, confidence-based fill
+    fill = _callout_fill(confidence, was_repositioned)
+    main_pts = _pentagon_pts(bx, by, 38, 28, 13, scale, rotation)
+    draw.polygon(main_pts, fill=fill)
+
+    # 3 — Number text: bold, white, centred
     text = str(number)
+    font_size = max(10, int(FONT_SIZE * scale))
     try:
         font = ImageFont.truetype(
-            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", FONT_SIZE
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", font_size
         )
     except (IOError, OSError):
         font = ImageFont.load_default()
 
     bbox = draw.textbbox((0, 0), text, font=font)
     tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
-    # Draw text at unrotated position — for 0° rotation just centre it
-    tx, ty = bx - hw // 2 - tw // 2 + 2, by - th // 2
+    # Mirror editor: offsetX=7 offsetY=6 (scaled), arrow tip is on the right
+    hw_scaled = 19 * scale
+    tx = bx - hw_scaled / 2 - tw / 2 + 2 * scale
+    ty = by - th / 2
     if rotation:
-        tx_r, ty_r = _rotate_pt(tx + tw / 2, ty + th / 2, bx, by, rotation)
-        tx, ty = tx_r - tw / 2, ty_r - th / 2
+        tx, ty = _rotate_pt(tx + tw / 2, ty + th / 2, bx, by, rotation)
+        tx -= tw / 2
+        ty -= th / 2
     draw.text((tx, ty), text, fill=BADGE_TEXT, font=font)
 
 
@@ -135,12 +177,15 @@ def render_annotated(
     # 2. Draw callouts
     draw = ImageDraw.Draw(img)
     for c in callouts:
-        # target_x/y are raw pixel coordinates from the pipeline
         cx = min(max(0, c["target_x"]), w)
         cy = min(max(0, c["target_y"]), h)
-        rotation = float(c.get("rotation", 0.0))
-        _draw_callout(img, draw, cx, cy, c["number"], rotation)
-        logger.debug("Drew callout #%d at (%d, %d) rot=%.1f°", c["number"], cx, cy, rotation)
+        _draw_callout(
+            img, draw, cx, cy, c["number"],
+            rotation=float(c.get("rotation", 0.0)),
+            confidence=c.get("confidence"),
+            was_repositioned=bool(c.get("was_repositioned", False)),
+        )
+        logger.debug("Drew callout #%d at (%d, %d)", c["number"], cx, cy)
 
     # 3. Save to temp file
     with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
