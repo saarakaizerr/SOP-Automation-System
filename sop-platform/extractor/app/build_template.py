@@ -20,6 +20,12 @@ from docx.enum.section import WD_SECTION
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.shared import Pt, Inches, RGBColor, Cm
+from lxml import etree
+
+# DrawingML namespace URIs for the floating corner shape
+_WP  = "http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"
+_DML = "http://schemas.openxmlformats.org/drawingml/2006/main"
+_WPS = "http://schemas.microsoft.com/office/word/2010/wordprocessingShape"
 
 
 # ── Brand colours (matching Aged Debtor / Starboard Hotels palette) ──────────
@@ -31,7 +37,7 @@ BORDER   = RGBColor(0xD1, 0xD5, 0xDB)   # table border
 
 TEMPLATE_PATH = Path("/data/templates/sop_template.docx")
 _VERSION_PATH = TEMPLATE_PATH.with_suffix(".version")
-_TEMPLATE_VERSION = "17"  # increment when template structure changes
+_TEMPLATE_VERSION = "18"  # increment when template structure changes
 
 _ASSETS_DIR = Path(__file__).parent / "assets"
 _HEADER_IMG = _ASSETS_DIR / "header1.jpg"
@@ -216,17 +222,82 @@ def _build_footer(section) -> None:
         _set_run_font(r_brand, 8, bold=True, color=DARK)
 
 
+def _add_corner_shape(para) -> None:
+    """
+    Add a floating orange rounded rectangle anchored to the page top-right corner.
+    The shape is 4 cm × 4 cm and positioned so 2 cm overflows both the right and
+    top page edges — only the bottom-left quarter-circle arc is visible on the page,
+    matching the Infomate template brand mark.
+    """
+    SIZE  = 1440000   # 4 cm in EMU  (1 cm = 360000 EMU)
+    POS_H = 6840000   # 19 cm from page left  →  2 cm visible at right edge
+    POS_V = -720000   # -2 cm from page top   →  2 cm visible below top edge
+
+    r = para.add_run()
+
+    drawing = etree.SubElement(r._r, qn("w:drawing"))
+
+    anchor = etree.SubElement(
+        drawing, f"{{{_WP}}}anchor",
+        distT="0", distB="0", distL="0", distR="0",
+        simplePos="0", relativeHeight="251659264",
+        behindDoc="0", locked="0", layoutInCell="1", allowOverlap="1",
+    )
+    etree.SubElement(anchor, f"{{{_WP}}}simplePos", x="0", y="0")
+
+    pos_h = etree.SubElement(anchor, f"{{{_WP}}}positionH", relativeFrom="page")
+    h_off = etree.SubElement(pos_h, f"{{{_WP}}}posOffset")
+    h_off.text = str(POS_H)
+
+    pos_v = etree.SubElement(anchor, f"{{{_WP}}}positionV", relativeFrom="page")
+    v_off = etree.SubElement(pos_v, f"{{{_WP}}}posOffset")
+    v_off.text = str(POS_V)
+
+    etree.SubElement(anchor, f"{{{_WP}}}extent", cx=str(SIZE), cy=str(SIZE))
+    etree.SubElement(anchor, f"{{{_WP}}}effectExtent", l="0", t="0", r="0", b="0")
+    etree.SubElement(anchor, f"{{{_WP}}}wrapNone")
+    etree.SubElement(anchor, f"{{{_WP}}}docPr", id="9001", name="OrangeCorner", descr="")
+    etree.SubElement(anchor, f"{{{_WP}}}cNvGraphicFramePr")
+
+    graphic = etree.SubElement(anchor, f"{{{_DML}}}graphic")
+    gd = etree.SubElement(
+        graphic, f"{{{_DML}}}graphicData",
+        uri="http://schemas.microsoft.com/office/word/2010/wordprocessingShape",
+    )
+
+    wsp = etree.SubElement(gd, f"{{{_WPS}}}wsp")
+    cnv_sp = etree.SubElement(wsp, f"{{{_WPS}}}cNvSpPr")
+    etree.SubElement(cnv_sp, f"{{{_DML}}}spLocks", noChangeGeom="1")
+
+    sp_pr = etree.SubElement(wsp, f"{{{_WPS}}}spPr")
+    xfrm = etree.SubElement(sp_pr, f"{{{_DML}}}xfrm")
+    etree.SubElement(xfrm, f"{{{_DML}}}off", x="0", y="0")
+    etree.SubElement(xfrm, f"{{{_DML}}}ext", cx=str(SIZE), cy=str(SIZE))
+
+    # roundRect with adj=50000 → corner radius = 50% of dimension = perfect quarter-circle
+    geom = etree.SubElement(sp_pr, f"{{{_DML}}}prstGeom", prst="roundRect")
+    av_lst = etree.SubElement(geom, f"{{{_DML}}}avLst")
+    etree.SubElement(av_lst, f"{{{_DML}}}gd", name="adj", fmla="val 50000")
+
+    fill = etree.SubElement(sp_pr, f"{{{_DML}}}solidFill")
+    etree.SubElement(fill, f"{{{_DML}}}srgbClr", val="E85C1A")
+
+    ln = etree.SubElement(sp_pr, f"{{{_DML}}}ln")
+    etree.SubElement(ln, f"{{{_DML}}}noFill")
+
+    etree.SubElement(wsp, f"{{{_WPS}}}bodyPr")
+
+
 def _build_header(section) -> None:
-    """Add Infomate-style header to the section (non-first pages)."""
+    """Add Infomate-style header with floating orange corner shape."""
     header = section.header
     header.is_linked_to_previous = False
 
     p_hdr = header.paragraphs[0]
     p_hdr.clear()
     _set_para_spacing(p_hdr, before_pt=0, after_pt=0)
-    p_hdr.alignment = WD_ALIGN_PARAGRAPH.RIGHT
 
-    # Explicitly clear any paragraph shading inherited from the Header style
+    # Clear paragraph shading inherited from the Header style
     pPr_hdr = p_hdr._p.get_or_add_pPr()
     existing_shd = pPr_hdr.find(qn("w:shd"))
     if existing_shd is not None:
@@ -237,14 +308,12 @@ def _build_header(section) -> None:
     clear_shd.set(qn("w:fill"), "auto")
     pPr_hdr.append(clear_shd)
 
-    if _HEADER_IMG.exists():
-        run = p_hdr.add_run()
-        run.add_picture(str(_HEADER_IMG), height=Inches(0.45))
-    else:
-        r_hdr = p_hdr.add_run("  ")
-        _set_run_font(r_hdr, 4)
+    # Floating orange rounded rectangle pinned to page top-right corner
+    _add_corner_shape(p_hdr)
+    r_space = p_hdr.add_run(" ")
+    _set_run_font(r_space, 1)
 
-    # Thin horizontal separator line below the header image
+    # Thin horizontal separator line below header area
     p_line = header.add_paragraph()
     _set_para_spacing(p_line, before_pt=0, after_pt=0)
     pPr_line = p_line._p.get_or_add_pPr()
