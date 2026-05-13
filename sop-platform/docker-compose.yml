@@ -70,6 +70,7 @@ services:
       context: ./api
       dockerfile: Dockerfile
     container_name: sop-api
+    restart: unless-stopped
     environment:
       DATABASE_URL: ${DATABASE_URL}
       CORS_ORIGINS: ${CORS_ORIGINS}
@@ -107,6 +108,7 @@ services:
       args:
         INSTALL_MERMAID: "false"
     container_name: sop-extractor
+    restart: unless-stopped
     environment:
       SUPABASE_URL: ${SUPABASE_URL}
       SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_KEY}

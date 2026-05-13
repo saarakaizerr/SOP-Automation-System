@@ -2,6 +2,37 @@
 
 ---
 
+## 2026-05-13
+
+### Bug Fix — WF0 502 on probe-video (intermittent, rebuild window)
+
+**Symptom**
+WF0 (Smart Ingest & Auto-Split) returns 502 Bad Gateway when calling
+`https://soptest.cloudnavision.com/api/probe-video`. Error is intermittent — works for a while, then breaks after a code deployment.
+
+**Root Cause**
+`sop-api` and `sop-extractor` containers had no restart policy in `docker-compose.yml`. When containers were stopped during a rebuild (`docker compose up --build sop-api sop-extractor`), the Cloudflare Tunnel could not connect to `sop-api:8000` and returned 502. If WF0 (on its schedule) fired during the 1–2 min rebuild window, n8n saw 502.
+
+**Fix**
+Added `restart: unless-stopped` to `sop-api` and `sop-extractor` in `docker-compose.yml`. Containers now auto-restart after crashes. For planned rebuilds, the window is still ~60s — acceptable since WF0 retries on failure.
+
+### Enhancement — DOCX Export Restructure (Template v14)
+
+Restructured DOCX export to match the Aged Debtor Process PDF reference:
+- TOC section order: 1 Procedure Description (with 5 sub-items) → 2 Training Prerequisites → 3 Software Applications → 4 Process Map → 5 Detailed Procedure → 6–13 post-sections → 14 SOP Author/Reviewer/Approver Certification
+- Removed orange bar under TOC heading
+- Auto-crop Windows taskbar from embedded screenshots (numpy brightness transition detection)
+
+### Enhancement — Callout Badge Rendering (annotator.py)
+
+Annotated screenshots now match the editor's selected/active callout style exactly:
+- Confidence-based fill: blue (repositioned), green (ocr_exact/ocr_fuzzy), amber (gemini default)
+- Red #DC2626 highlight border (matches editor's selection indicator)
+- Badge scale: `max(1.0, min(w,h)/474)` — correct size on full-resolution 1080p screenshots
+- Bug fix: `confidence` and `was_repositioned` were not passed through the API payload (steps.py → extractor)
+
+---
+
 ## 2026-05-12
 
 ### Bug Fix — Frame Extraction Silent Failure (WF2)
