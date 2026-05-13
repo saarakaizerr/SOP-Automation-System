@@ -30,7 +30,7 @@ BORDER   = RGBColor(0xD1, 0xD5, 0xDB)   # table border
 
 TEMPLATE_PATH = Path("/data/templates/sop_template.docx")
 _VERSION_PATH = TEMPLATE_PATH.with_suffix(".version")
-_TEMPLATE_VERSION = "12"  # increment when template structure changes
+_TEMPLATE_VERSION = "13"  # increment when template structure changes
 
 _ASSETS_DIR = Path(__file__).parent / "assets"
 _HEADER_IMG = _ASSETS_DIR / "header.jpg"
@@ -281,13 +281,6 @@ def build(force: bool = False):
     for run in p_toc_head.runs:
         _set_run_font(run, 16, bold=True, color=ORANGE)
 
-    # Orange underline bar
-    p_bar = doc.add_paragraph()
-    _para_shade(p_bar, "E85C1A")
-    _set_para_spacing(p_bar, before_pt=0, after_pt=8)
-    r = p_bar.add_run(" ")
-    _set_run_font(r, 4)
-
     # Jinja2 loop — use if/else to select main vs sub-item paragraph style.
     # This avoids putting Jinja2 expressions inside XML attributes (unreliable).
     _ctrl_para(doc, "{%- for entry in toc_entries %}")
@@ -300,17 +293,29 @@ def build(force: bool = False):
 
     doc.add_page_break()
 
-    # ── PRE-SECTIONS ─────────────────────────────────────────────────────────
-    _ctrl_para(doc, "{%- for section in sections_pre %}")
+    # ── PROCEDURE DESCRIPTION (section 1) with sub-sections ─────────────────
+    h1_proc = doc.add_heading("1  Procedure Description", level=1)
+    for run in h1_proc.runs:
+        _set_run_font(run, 15, bold=True, color=ORANGE)
+    _set_para_spacing(h1_proc, before_pt=12, after_pt=8)
 
-    h2 = doc.add_heading("{{ section.num }}  {{ section.section_title }}", level=2)
-    for run in h2.runs:
-        _set_run_font(run, 13, bold=True, color=ORANGE)
-    _set_para_spacing(h2, before_pt=18, after_pt=6)
+    _ctrl_para(doc, "{%- for section in procedure_sub_sections %}")
+    h2_sub = doc.add_heading("{{ section.section_title }}", level=2)
+    for run in h2_sub.runs:
+        _set_run_font(run, 12, bold=True, color=DARK)
+    _set_para_spacing(h2_sub, before_pt=10, after_pt=4)
+    p_proc_sub = doc.add_paragraph("{{r section.content_text }}")
+    p_proc_sub.style = "Normal"
+    _ctrl_para(doc, "{%- endfor %}")
 
-    p_content = doc.add_paragraph("{{r section.content_text }}")
-    p_content.style = "Normal"
-
+    # ── OTHER PRE-SECTIONS (Training Prerequisites, Software Applications, etc.)
+    _ctrl_para(doc, "{%- for section in other_pre_sections %}")
+    h1_pre = doc.add_heading("{{ section.num }}  {{ section.section_title }}", level=1)
+    for run in h1_pre.runs:
+        _set_run_font(run, 15, bold=True, color=ORANGE)
+    _set_para_spacing(h1_pre, before_pt=12, after_pt=8)
+    p_pre_content = doc.add_paragraph("{{r section.content_text }}")
+    p_pre_content.style = "Normal"
     _ctrl_para(doc, "{%- endfor %}")
 
     doc.add_page_break()

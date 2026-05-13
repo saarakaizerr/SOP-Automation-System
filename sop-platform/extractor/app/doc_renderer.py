@@ -361,11 +361,23 @@ def _build_context(tpl: DocxTemplate, sop_data: dict, tmp_dir: Path, table_regis
     raw_pre  = [s for s in all_sections if (s.get("display_order") or 0) < 50]
     raw_post = [s for s in all_sections if (s.get("display_order") or 0) >= 50]
 
-    # Assign section numbers sequentially (matching Aged Debtor TOC style)
-    sec_num = 1
-    sections_pre = []
-    for s in raw_pre:
-        sections_pre.append({
+    # First 5 pre-sections are sub-items of "1 Procedure Description";
+    # remaining pre-sections (Training Prerequisites, Software Applications, etc.) are numbered 2, 3, ...
+    _PROC_SUB_COUNT = 5
+    raw_proc_subs = raw_pre[:_PROC_SUB_COUNT]
+    raw_other_pre = raw_pre[_PROC_SUB_COUNT:]
+
+    procedure_sub_sections = []
+    for s in raw_proc_subs:
+        procedure_sub_sections.append({
+            "section_title": _sanitize_text(s.get("section_title") or ""),
+            "content_text": _section_content(tpl, s, table_registry if table_registry is not None else {}),
+        })
+
+    sec_num = 2  # section 1 is "Procedure Description" parent
+    other_pre_sections = []
+    for s in raw_other_pre:
+        other_pre_sections.append({
             "num": str(sec_num),
             "section_title": _sanitize_text(s.get("section_title") or ""),
             "content_text": _section_content(tpl, s, table_registry if table_registry is not None else {}),
@@ -404,15 +416,16 @@ def _build_context(tpl: DocxTemplate, sop_data: dict, tmp_dir: Path, table_regis
     cover_page = _generate_cover_page(tpl, sop_data, tmp_dir, today)
 
     # ── Build TOC entries ─────────────────────────────────────────────────────
-    # is_sub=False → main entry (Heading 1/2, with section number, no indent)
-    # is_sub=True  → sub-item (Heading 3 step, indented, no section number)
+    # is_sub=False → numbered main section
+    # is_sub=True  → indented sub-item under Procedure Description (no number)
     toc_entries = []
-    for s in sections_pre:
+    toc_entries.append({"num": "1", "title": "Procedure Description", "is_sub": False})
+    for s in procedure_sub_sections:
+        toc_entries.append({"num": "", "title": s["section_title"], "is_sub": True})
+    for s in other_pre_sections:
         toc_entries.append({"num": s["num"], "title": s["section_title"], "is_sub": False})
-
     toc_entries.append({"num": pm_section_num, "title": "Process Map", "is_sub": False})
     toc_entries.append({"num": dp_section_num, "title": "Detailed Procedure", "is_sub": False})
-
     for s in sections_post:
         toc_entries.append({"num": s["num"], "title": s["section_title"], "is_sub": False})
 
@@ -425,7 +438,8 @@ def _build_context(tpl: DocxTemplate, sop_data: dict, tmp_dir: Path, table_regis
         "generated_date": today,
         "step_count": sop_data.get("step_count", len(steps_raw)),
         "steps": steps_ctx,
-        "sections_pre": sections_pre,
+        "procedure_sub_sections": procedure_sub_sections,
+        "other_pre_sections": other_pre_sections,
         "sections_post": sections_post,
         "pm_section_num": pm_section_num,
         "dp_section_num": dp_section_num,
