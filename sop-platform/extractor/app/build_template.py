@@ -30,7 +30,7 @@ BORDER   = RGBColor(0xD1, 0xD5, 0xDB)   # table border
 
 TEMPLATE_PATH = Path("/data/templates/sop_template.docx")
 _VERSION_PATH = TEMPLATE_PATH.with_suffix(".version")
-_TEMPLATE_VERSION = "13"  # increment when template structure changes
+_TEMPLATE_VERSION = "14"  # increment when template structure changes
 
 _ASSETS_DIR = Path(__file__).parent / "assets"
 _HEADER_IMG = _ASSETS_DIR / "header.jpg"
@@ -410,6 +410,35 @@ def build(force: bool = False):
     p_post.style = "Normal"
 
     _ctrl_para(doc, "{%- endfor %}")
+
+    # ── SOP AUTHOR/REVIEWER/APPROVER CERTIFICATION ───────────────────────────
+    h1_cert = doc.add_heading(
+        "{{ cert_section_num }}  SOP Author/Reviewer/Approver Certification", level=1
+    )
+    for run in h1_cert.runs:
+        _set_run_font(run, 15, bold=True, color=ORANGE)
+    _set_para_spacing(h1_cert, before_pt=18, after_pt=8)
+
+    cert_tbl = doc.add_table(rows=4, cols=3)
+    _table_borders(cert_tbl)
+    cert_tbl.alignment = WD_TABLE_ALIGNMENT.LEFT
+
+    cert_headers = ["Role", "Name", "Signature & Date"]
+    cert_roles   = ["Author / SOP Writer", "Reviewer", "Approver"]
+
+    for i, h in enumerate(cert_headers):
+        cell = cert_tbl.rows[0].cells[i]
+        _set_cell_bg(cell, "E85C1A")
+        run = cell.paragraphs[0].add_run(h)
+        _set_run_font(run, 10, bold=True, color=WHITE)
+
+    for r_idx, role in enumerate(cert_roles):
+        bg = "F8F9FA" if r_idx % 2 == 0 else "FFFFFF"
+        for c_idx, val in enumerate([role, "", ""]):
+            cell = cert_tbl.rows[r_idx + 1].cells[c_idx]
+            _set_cell_bg(cell, bg)
+            run = cell.paragraphs[0].add_run(val)
+            _set_run_font(run, 10)
 
     doc.save(str(TEMPLATE_PATH))
     _VERSION_PATH.write_text(_TEMPLATE_VERSION)

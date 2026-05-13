@@ -361,11 +361,14 @@ def _build_context(tpl: DocxTemplate, sop_data: dict, tmp_dir: Path, table_regis
     raw_pre  = [s for s in all_sections if (s.get("display_order") or 0) < 50]
     raw_post = [s for s in all_sections if (s.get("display_order") or 0) >= 50]
 
-    # First 5 pre-sections are sub-items of "1 Procedure Description";
-    # remaining pre-sections (Training Prerequisites, Software Applications, etc.) are numbered 2, 3, ...
+    # First 5 pre-sections → sub-items of "1 Procedure Description"
+    # Next 2 pre-sections → sections 2 and 3 (Training Prerequisites, Software Applications)
+    # Remaining pre-sections + all post-sections → numbered after Detailed Procedure (6, 7, ...)
     _PROC_SUB_COUNT = 5
-    raw_proc_subs = raw_pre[:_PROC_SUB_COUNT]
-    raw_other_pre = raw_pre[_PROC_SUB_COUNT:]
+    _OTHER_PRE_COUNT = 2
+    raw_proc_subs   = raw_pre[:_PROC_SUB_COUNT]
+    raw_other_pre   = raw_pre[_PROC_SUB_COUNT:_PROC_SUB_COUNT + _OTHER_PRE_COUNT]
+    raw_sections_post = raw_pre[_PROC_SUB_COUNT + _OTHER_PRE_COUNT:] + raw_post
 
     procedure_sub_sections = []
     for s in raw_proc_subs:
@@ -384,17 +387,19 @@ def _build_context(tpl: DocxTemplate, sop_data: dict, tmp_dir: Path, table_regis
         })
         sec_num += 1
 
-    pm_section_num = str(sec_num); sec_num += 1
-    dp_section_num = str(sec_num); sec_num += 1
+    pm_section_num = str(sec_num); sec_num += 1  # section 4
+    dp_section_num = str(sec_num); sec_num += 1  # section 5
 
     sections_post = []
-    for s in raw_post:
+    for s in raw_sections_post:
         sections_post.append({
             "num": str(sec_num),
             "section_title": _sanitize_text(s.get("section_title") or ""),
             "content_text": _section_content(tpl, s, table_registry if table_registry is not None else {}),
         })
         sec_num += 1
+
+    cert_section_num = str(sec_num)
 
     pm_config = sop_data.get("process_map_config")
     confirmed_url = pm_config.get("confirmed_url") if pm_config else None
@@ -428,6 +433,7 @@ def _build_context(tpl: DocxTemplate, sop_data: dict, tmp_dir: Path, table_regis
     toc_entries.append({"num": dp_section_num, "title": "Detailed Procedure", "is_sub": False})
     for s in sections_post:
         toc_entries.append({"num": s["num"], "title": s["section_title"], "is_sub": False})
+    toc_entries.append({"num": cert_section_num, "title": "SOP Author/Reviewer/Approver Certification", "is_sub": False})
 
     return {
         "cover_page": cover_page,
@@ -443,6 +449,7 @@ def _build_context(tpl: DocxTemplate, sop_data: dict, tmp_dir: Path, table_regis
         "sections_post": sections_post,
         "pm_section_num": pm_section_num,
         "dp_section_num": dp_section_num,
+        "cert_section_num": cert_section_num,
         "process_map": process_map,
         "toc_entries": toc_entries,
     }
