@@ -37,7 +37,7 @@ BORDER   = RGBColor(0xD1, 0xD5, 0xDB)   # table border
 
 TEMPLATE_PATH = Path("/data/templates/sop_template.docx")
 _VERSION_PATH = TEMPLATE_PATH.with_suffix(".version")
-_TEMPLATE_VERSION = "18"  # increment when template structure changes
+_TEMPLATE_VERSION = "19"  # increment when template structure changes
 
 _ASSETS_DIR = Path(__file__).parent / "assets"
 _HEADER_IMG = _ASSETS_DIR / "header1.jpg"
@@ -224,21 +224,37 @@ def _build_footer(section) -> None:
 
 def _add_corner_shape(para) -> None:
     """
-    Add a floating orange rounded rectangle anchored to the page top-right corner.
-    The shape is 4 cm × 4 cm and positioned so 2 cm overflows both the right and
-    top page edges — only the bottom-left quarter-circle arc is visible on the page,
-    matching the Infomate template brand mark.
+    Place header1.jpg as a floating image anchored to the page top-right corner.
+    The 4×4 cm image is positioned so its top and right edges overflow the page
+    boundary by 1 cm each — only the rounded bottom-left corner is visible inside
+    the page, matching the Infomate template brand mark.
     """
-    SIZE  = 1440000   # 4 cm in EMU  (1 cm = 360000 EMU)
-    POS_H = 6840000   # 19 cm from page left  →  2 cm visible at right edge
-    POS_V = -720000   # -2 cm from page top   →  2 cm visible below top edge
+    if not _HEADER_IMG.exists():
+        return
 
+    SIZE_EMU = int(Cm(4))    # 4 cm display size
+    POS_H    = int(Cm(18))   # 18 cm from page left → right edge at 22 cm (1 cm overflow)
+    POS_V    = -int(Cm(1))   # -1 cm from page top  → 3 cm visible below top edge
+
+    # Add the image inline first so python-docx registers it in the header part
+    # relationships and embeds the correct rId in the pic:pic XML.
     r = para.add_run()
+    r.add_picture(str(_HEADER_IMG), width=Cm(4), height=Cm(4))
 
-    drawing = etree.SubElement(r._r, qn("w:drawing"))
+    drawing = r._r.find(qn("w:drawing"))
+    if drawing is None:
+        return
+    inline = drawing.find(f"{{{_WP}}}inline")
+    if inline is None:
+        return
 
-    anchor = etree.SubElement(
-        drawing, f"{{{_WP}}}anchor",
+    # Pull the key children out of inline — they carry the image rId
+    graphic = inline.find(f"{{{_DML}}}graphic")
+    doc_pr  = inline.find(f"{{{_WP}}}docPr")
+
+    # Build wp:anchor with absolute page-relative positioning
+    anchor = etree.Element(
+        f"{{{_WP}}}anchor",
         distT="0", distB="0", distL="0", distR="0",
         simplePos="0", relativeHeight="251659264",
         behindDoc="0", locked="0", layoutInCell="1", allowOverlap="1",
@@ -246,46 +262,28 @@ def _add_corner_shape(para) -> None:
     etree.SubElement(anchor, f"{{{_WP}}}simplePos", x="0", y="0")
 
     pos_h = etree.SubElement(anchor, f"{{{_WP}}}positionH", relativeFrom="page")
-    h_off = etree.SubElement(pos_h, f"{{{_WP}}}posOffset")
-    h_off.text = str(POS_H)
+    etree.SubElement(pos_h, f"{{{_WP}}}posOffset").text = str(POS_H)
 
     pos_v = etree.SubElement(anchor, f"{{{_WP}}}positionV", relativeFrom="page")
-    v_off = etree.SubElement(pos_v, f"{{{_WP}}}posOffset")
-    v_off.text = str(POS_V)
+    etree.SubElement(pos_v, f"{{{_WP}}}posOffset").text = str(POS_V)
 
-    etree.SubElement(anchor, f"{{{_WP}}}extent", cx=str(SIZE), cy=str(SIZE))
+    etree.SubElement(anchor, f"{{{_WP}}}extent", cx=str(SIZE_EMU), cy=str(SIZE_EMU))
     etree.SubElement(anchor, f"{{{_WP}}}effectExtent", l="0", t="0", r="0", b="0")
     etree.SubElement(anchor, f"{{{_WP}}}wrapNone")
-    etree.SubElement(anchor, f"{{{_WP}}}docPr", id="9001", name="OrangeCorner", descr="")
+
+    if doc_pr is not None:
+        anchor.append(doc_pr)   # moves element (carries docPr id)
+    else:
+        etree.SubElement(anchor, f"{{{_WP}}}docPr", id="9001", name="HeaderImg", descr="")
+
     etree.SubElement(anchor, f"{{{_WP}}}cNvGraphicFramePr")
 
-    graphic = etree.SubElement(anchor, f"{{{_DML}}}graphic")
-    gd = etree.SubElement(
-        graphic, f"{{{_DML}}}graphicData",
-        uri="http://schemas.microsoft.com/office/word/2010/wordprocessingShape",
-    )
+    if graphic is not None:
+        anchor.append(graphic)  # moves element (carries the rId reference)
 
-    wsp = etree.SubElement(gd, f"{{{_WPS}}}wsp")
-    cnv_sp = etree.SubElement(wsp, f"{{{_WPS}}}cNvSpPr")
-    etree.SubElement(cnv_sp, f"{{{_DML}}}spLocks", noChangeGeom="1")
-
-    sp_pr = etree.SubElement(wsp, f"{{{_WPS}}}spPr")
-    xfrm = etree.SubElement(sp_pr, f"{{{_DML}}}xfrm")
-    etree.SubElement(xfrm, f"{{{_DML}}}off", x="0", y="0")
-    etree.SubElement(xfrm, f"{{{_DML}}}ext", cx=str(SIZE), cy=str(SIZE))
-
-    # roundRect with adj=50000 → corner radius = 50% of dimension = perfect quarter-circle
-    geom = etree.SubElement(sp_pr, f"{{{_DML}}}prstGeom", prst="roundRect")
-    av_lst = etree.SubElement(geom, f"{{{_DML}}}avLst")
-    etree.SubElement(av_lst, f"{{{_DML}}}gd", name="adj", fmla="val 50000")
-
-    fill = etree.SubElement(sp_pr, f"{{{_DML}}}solidFill")
-    etree.SubElement(fill, f"{{{_DML}}}srgbClr", val="E85C1A")
-
-    ln = etree.SubElement(sp_pr, f"{{{_DML}}}ln")
-    etree.SubElement(ln, f"{{{_DML}}}noFill")
-
-    etree.SubElement(wsp, f"{{{_WPS}}}bodyPr")
+    # Swap inline → anchor inside the drawing element
+    drawing.remove(inline)
+    drawing.append(anchor)
 
 
 def _build_header(section) -> None:
