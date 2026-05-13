@@ -30,7 +30,7 @@ BORDER   = RGBColor(0xD1, 0xD5, 0xDB)   # table border
 
 TEMPLATE_PATH = Path("/data/templates/sop_template.docx")
 _VERSION_PATH = TEMPLATE_PATH.with_suffix(".version")
-_TEMPLATE_VERSION = "15"  # increment when template structure changes
+_TEMPLATE_VERSION = "16"  # increment when template structure changes
 
 _ASSETS_DIR = Path(__file__).parent / "assets"
 _HEADER_IMG = _ASSETS_DIR / "header1.jpg"
@@ -224,14 +224,24 @@ def _build_header(section) -> None:
     p_hdr.clear()
     _set_para_spacing(p_hdr, before_pt=0, after_pt=0)
     p_hdr.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+
+    # Explicitly clear any paragraph shading inherited from the Header style
+    pPr_hdr = p_hdr._p.get_or_add_pPr()
+    existing_shd = pPr_hdr.find(qn("w:shd"))
+    if existing_shd is not None:
+        pPr_hdr.remove(existing_shd)
+    clear_shd = OxmlElement("w:shd")
+    clear_shd.set(qn("w:val"), "clear")
+    clear_shd.set(qn("w:color"), "auto")
+    clear_shd.set(qn("w:fill"), "auto")
+    pPr_hdr.append(clear_shd)
+
     if _HEADER_IMG.exists():
         run = p_hdr.add_run()
         run.add_picture(str(_HEADER_IMG), height=Inches(0.45))
     else:
-        # Fallback: orange bar
-        _para_shade(p_hdr, "E85C1A")
         r_hdr = p_hdr.add_run("  ")
-        _set_run_font(r_hdr, 4, color=WHITE)
+        _set_run_font(r_hdr, 4)
 
     # Thin horizontal separator line below the header image
     p_line = header.add_paragraph()
