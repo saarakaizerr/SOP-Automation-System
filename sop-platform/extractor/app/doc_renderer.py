@@ -598,6 +598,42 @@ def _build_cover_base() -> "Image.Image":
     return img
 
 
+def _crop_taskbar(img: "PILImage.Image") -> "PILImage.Image":
+    """
+    Detect and remove the Windows taskbar (or any bottom OS chrome) from a screenshot.
+    Analyses brightness transitions in the bottom 15 % of the image; if a clear
+    horizontal boundary is found inside the bottom 12 %, the image is cropped there.
+    """
+    try:
+        import numpy as np
+
+        w, h = img.size
+        if h < 300:
+            return img
+
+        # Analyse bottom 15 % (capped at 120 px — covers all common taskbar heights)
+        check_h = min(120, max(40, h * 15 // 100))
+        arr = np.array(img.convert("L"))          # greyscale, shape (h, w)
+        bottom = arr[h - check_h:, :]             # shape (check_h, w)
+
+        row_means = bottom.mean(axis=1)           # mean brightness per row
+        diffs = np.abs(np.diff(row_means))        # row-to-row absolute change
+
+        # Threshold: either a fixed floor or half the local std — whichever is larger
+        threshold = max(8.0, float(diffs.std()) * 1.0)
+        jump_indices = np.where(diffs > threshold)[0]
+
+        if jump_indices.size > 0:
+            # Take the topmost qualifying jump (first entry from the top of check_h)
+            boundary_in_check = int(jump_indices[0])
+            boundary_y = h - check_h + boundary_in_check + 1
+            if boundary_y >= h * 0.88:            # must be in bottom 12 %
+                return img.crop((0, 0, w, boundary_y))
+    except Exception:
+        pass  # never break the render over a crop heuristic
+    return img
+
+
 def _download_inline_image(
     tpl: DocxTemplate,
     url: str,
@@ -605,8 +641,8 @@ def _download_inline_image(
     step_id: str,
 ) -> Optional[InlineImage]:
     """
-    Download a screenshot, resize to max 1400 px wide, and save as JPEG.
-    Keeps DOCX size small and render time fast.
+    Download a screenshot, auto-crop the OS taskbar, resize to max 1400 px wide,
+    and save as JPEG. Keeps DOCX size small and render time fast.
     """
     try:
         from PIL import Image as PILImage
@@ -616,6 +652,8 @@ def _download_inline_image(
         resp.raise_for_status()
 
         img = PILImage.open(io.BytesIO(resp.content)).convert("RGB")
+        img = _crop_taskbar(img)
+
         max_w = 1400
         if img.width > max_w:
             ratio = max_w / img.width
