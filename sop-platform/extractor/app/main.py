@@ -154,8 +154,11 @@ class RenderDocResponse(BaseModel):
 
 class AnnotatedCallout(BaseModel):
     number: int
-    target_x: int   # 0–100 integer percentage
-    target_y: int   # 0–100 integer percentage
+    target_x: int
+    target_y: int
+    rotation: float = 0.0
+    confidence: Optional[str] = None
+    was_repositioned: bool = False
 
 
 class RenderAnnotatedRequest(BaseModel):

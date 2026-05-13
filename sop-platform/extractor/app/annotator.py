@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 # Main pentagon:      w=38  h=28  tip=13
 # Highlight pentagon: w=46  h=34  tip=12  (white fill, blue border — active/selected state)
 BADGE_TEXT   = (255, 255, 255)
-BADGE_HL_CLR = (59, 130, 246)    # blue #3b82f6 — selection indicator border
+BADGE_HL_CLR = (220, 38, 38)     # red #DC2626 — selection indicator border
 FONT_SIZE    = 12                # matches editor fontSize=12
 
 BOX_COLOR_MAP = {

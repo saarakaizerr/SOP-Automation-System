@@ -414,7 +414,14 @@ async def render_annotated(
         "step_id": str(step_id),
         "screenshot_url": sas_screenshot_url,
         "callouts": [
-            {"number": c.callout_number, "target_x": c.target_x, "target_y": c.target_y, "rotation": c.rotation or 0.0}
+            {
+                "number": c.callout_number,
+                "target_x": c.target_x,
+                "target_y": c.target_y,
+                "rotation": c.rotation or 0.0,
+                "confidence": c.confidence,
+                "was_repositioned": c.was_repositioned or False,
+            }
             for c in sorted(step.callouts, key=lambda c: c.callout_number)
         ],
         "highlight_boxes": step.highlight_boxes or [],
