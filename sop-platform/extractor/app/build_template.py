@@ -30,10 +30,10 @@ BORDER   = RGBColor(0xD1, 0xD5, 0xDB)   # table border
 
 TEMPLATE_PATH = Path("/data/templates/sop_template.docx")
 _VERSION_PATH = TEMPLATE_PATH.with_suffix(".version")
-_TEMPLATE_VERSION = "14"  # increment when template structure changes
+_TEMPLATE_VERSION = "15"  # increment when template structure changes
 
 _ASSETS_DIR = Path(__file__).parent / "assets"
-_HEADER_IMG = _ASSETS_DIR / "header.jpg"
+_HEADER_IMG = _ASSETS_DIR / "header1.jpg"
 _FOOTER_IMG = _ASSETS_DIR / "footer.jpg"
 
 
@@ -158,9 +158,23 @@ def _build_footer(section) -> None:
     footer = section.footer
     footer.is_linked_to_previous = False
 
-    # URL line + right-aligned page number — reuse default first paragraph
-    p_url = footer.paragraphs[0]
-    p_url.clear()
+    # Thin horizontal separator line above the footer content (mirrors header line)
+    p_sep = footer.paragraphs[0]
+    p_sep.clear()
+    _set_para_spacing(p_sep, before_pt=0, after_pt=0)
+    pPr_sep = p_sep._p.get_or_add_pPr()
+    pBdr_sep = OxmlElement("w:pBdr")
+    top_b = OxmlElement("w:top")
+    top_b.set(qn("w:val"), "single")
+    top_b.set(qn("w:sz"), "6")
+    top_b.set(qn("w:space"), "1")
+    top_b.set(qn("w:color"), "AAAAAA")
+    pBdr_sep.append(top_b)
+    pPr_sep.append(pBdr_sep)
+    p_sep.add_run(" ").font.size = Pt(1)
+
+    # URL line + right-aligned page number
+    p_url = footer.add_paragraph()
     _set_para_spacing(p_url, before_pt=2, after_pt=0)
     r_url = p_url.add_run("https://www.infomateworld.com/")
     _set_run_font(r_url, 8, color=RGBColor(0x00, 0x00, 0xCC))
