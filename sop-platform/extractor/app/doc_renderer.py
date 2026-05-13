@@ -16,7 +16,7 @@ from docxtpl import DocxTemplate, InlineImage, RichText
 from docx.enum.table import WD_TABLE_ALIGNMENT
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
-from docx.shared import Inches, Pt, RGBColor
+from docx.shared import Inches, Pt, RGBColor, Cm
 
 logger = logging.getLogger(__name__)
 
@@ -455,7 +455,7 @@ def _build_context(tpl: DocxTemplate, sop_data: dict, tmp_dir: Path, table_regis
     }
 
 
-_COVER_TEMPLATE = Path(__file__).parent / "assets" / "cover_template.jpg"
+_COVER_TEMPLATE = Path(__file__).parent / "assets" / "cover_template2.jpg"
 
 
 def _generate_cover_page(
@@ -476,7 +476,7 @@ def _generate_cover_page(
         # ── Load base template (or fall back to generated version) ───────────
         if _COVER_TEMPLATE.exists():
             img = Image.open(str(_COVER_TEMPLATE)).convert("RGB")
-            img = img.resize((1260, 1944), Image.LANCZOS)
+            img = img.resize((2480, 3508), Image.LANCZOS)  # A4 at 300 DPI
         else:
             logger.warning("Cover template not found at %s — using generated fallback", _COVER_TEMPLATE)
             img = _build_cover_base()
@@ -531,7 +531,7 @@ def _generate_cover_page(
 
         cover_path = tmp_dir / "cover_page.jpg"
         img.save(str(cover_path), "JPEG", quality=95, optimize=True)
-        return InlineImage(tpl, str(cover_path), width=Inches(6.3))
+        return InlineImage(tpl, str(cover_path), width=Cm(21), height=Cm(29.7))
 
     except Exception as exc:
         logger.warning("Cover page generation failed: %s", exc)

@@ -16,6 +16,7 @@ from pathlib import Path
 from docx import Document
 from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_LINE_SPACING
 from docx.enum.table import WD_TABLE_ALIGNMENT, WD_ALIGN_VERTICAL
+from docx.enum.section import WD_SECTION
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.shared import Pt, Inches, RGBColor, Cm
@@ -30,7 +31,7 @@ BORDER   = RGBColor(0xD1, 0xD5, 0xDB)   # table border
 
 TEMPLATE_PATH = Path("/data/templates/sop_template.docx")
 _VERSION_PATH = TEMPLATE_PATH.with_suffix(".version")
-_TEMPLATE_VERSION = "16"  # increment when template structure changes
+_TEMPLATE_VERSION = "17"  # increment when template structure changes
 
 _ASSETS_DIR = Path(__file__).parent / "assets"
 _HEADER_IMG = _ASSETS_DIR / "header1.jpg"
@@ -270,18 +271,14 @@ def build(force: bool = False):
 
     doc = Document()
 
-    # ── Page setup (A4, professional margins) ────────────────────────────────
-    section = doc.sections[0]
-    section.page_width    = Cm(21)
-    section.page_height   = Cm(29.7)
-    section.top_margin    = Cm(2.5)
-    section.bottom_margin = Cm(2.5)
-    section.left_margin   = Cm(3.0)
-    section.right_margin  = Cm(2.0)
-    # Cover page (page 1) gets no header/footer; all other pages get the Infomate style
-    section.different_first_page_header_footer = True
-    _build_header(section)
-    _build_footer(section)
+    # ── Section 1: Cover page (zero margins, full-bleed) ─────────────────────
+    section1 = doc.sections[0]
+    section1.page_width    = Cm(21)
+    section1.page_height   = Cm(29.7)
+    section1.top_margin    = Cm(0)
+    section1.bottom_margin = Cm(0)
+    section1.left_margin   = Cm(0)
+    section1.right_margin  = Cm(0)
 
     # ── Default paragraph style ───────────────────────────────────────────────
     style = doc.styles["Normal"]
@@ -296,8 +293,17 @@ def build(force: bool = False):
     p_cover.paragraph_format.space_before = Pt(0)
     p_cover.paragraph_format.space_after = Pt(0)
 
-    # Page break before TOC
-    doc.add_page_break()
+    # ── Section 2: Content pages (normal margins, header/footer) ─────────────
+    # NEW_PAGE section break replaces the old doc.add_page_break() after cover
+    section2 = doc.add_section(WD_SECTION.NEW_PAGE)
+    section2.page_width    = Cm(21)
+    section2.page_height   = Cm(29.7)
+    section2.top_margin    = Cm(2.5)
+    section2.bottom_margin = Cm(2.5)
+    section2.left_margin   = Cm(3.0)
+    section2.right_margin  = Cm(2.0)
+    _build_header(section2)
+    _build_footer(section2)
 
     # ── TABLE OF CONTENTS ─────────────────────────────────────────────────────
     p_toc_head = doc.add_heading("Table of Contents", level=1)
