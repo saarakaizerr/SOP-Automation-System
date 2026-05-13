@@ -37,7 +37,7 @@ BORDER   = RGBColor(0xD1, 0xD5, 0xDB)   # table border
 
 TEMPLATE_PATH = Path("/data/templates/sop_template.docx")
 _VERSION_PATH = TEMPLATE_PATH.with_suffix(".version")
-_TEMPLATE_VERSION = "19"  # increment when template structure changes
+_TEMPLATE_VERSION = "20"  # increment when template structure changes
 
 _ASSETS_DIR = Path(__file__).parent / "assets"
 _HEADER_IMG = _ASSETS_DIR / "header1.jpg"
@@ -232,9 +232,9 @@ def _add_corner_shape(para) -> None:
     if not _HEADER_IMG.exists():
         return
 
-    SIZE_EMU = int(Cm(4))    # 4 cm display size
-    POS_H    = int(Cm(18))   # 18 cm from page left → right edge at 22 cm (1 cm overflow)
-    POS_V    = -int(Cm(1))   # -1 cm from page top  → 3 cm visible below top edge
+    SIZE_EMU = int(Cm(4))      # 4 cm display size
+    POS_H    = int(Cm(18.5))   # 18.5 cm from page left → right edge at 22.5 cm (1.5 cm overflow)
+    POS_V    = -int(Cm(2))     # -2 cm from page top   → only 2 cm visible below top edge
 
     # Add the image inline first so python-docx registers it in the header part
     # relationships and embeds the correct rId in the pic:pic XML.
