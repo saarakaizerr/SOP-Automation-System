@@ -6,6 +6,7 @@ Uses Pillow — already in requirements.txt (Pillow==10.4.0).
 
 import io
 import logging
+import math
 import tempfile
 from pathlib import Path
 
@@ -14,14 +15,13 @@ from PIL import Image, ImageDraw, ImageFont
 
 logger = logging.getLogger(__name__)
 
-# Callout badge styling — red-bordered rectangle with white fill
-BADGE_FILL    = (255, 255, 255)   # white background
-BADGE_BORDER  = (220, 38, 38)     # red border  (#DC2626)
-BADGE_TEXT_C  = (220, 38, 38)     # red number
-BADGE_PAD_X   = 7                 # horizontal padding inside box
-BADGE_PAD_Y   = 5                 # vertical padding inside box
-BADGE_BORDER_W = 3                # border thickness
-FONT_SIZE     = 15
+# Styling — matches the editor's green pentagon badge (ocr_exact default)
+BADGE_FILL  = (16, 185, 129)    # green (#10b981) — matches ocr_exact callout colour
+BADGE_TEXT  = (255, 255, 255)   # white number
+BADGE_W     = 38                # badge width (px at render resolution)
+BADGE_H     = 28                # badge height
+BADGE_TIP   = 13                # arrow tip extension
+FONT_SIZE   = 15
 
 BOX_COLOR_MAP = {
     'yellow': (234, 179, 8),
@@ -50,6 +50,14 @@ def _draw_highlight_boxes(img: Image.Image, boxes: list[dict]) -> Image.Image:
     return result.convert('RGB')
 
 
+def _rotate_pt(px: float, py: float, cx: float, cy: float, angle_deg: float):
+    """Rotate point (px, py) around centre (cx, cy) by angle_deg degrees."""
+    rad = math.radians(angle_deg)
+    cos_a, sin_a = math.cos(rad), math.sin(rad)
+    dx, dy = px - cx, py - cy
+    return cx + dx * cos_a - dy * sin_a, cy + dx * sin_a + dy * cos_a
+
+
 def _draw_callout(
     img: Image.Image,
     draw: ImageDraw.Draw,
@@ -58,10 +66,32 @@ def _draw_callout(
     number: int,
     rotation: float = 0.0,
 ) -> None:
-    """Draw a red-bordered rectangle callout label centred at (cx, cy)."""
+    """
+    Draw a rotated pentagon/arrow badge at (cx, cy) — matches the editor canvas shape.
+    rotation is in degrees (0 = arrow points right, 90 = down, 180 = left, 270 = up).
+    """
     iw, ih = img.size
-    text = str(number)
+    hw = BADGE_W // 2
+    hh = BADGE_H // 2
+    tip = BADGE_TIP
 
+    # Clamp centre so badge stays inside image
+    bx = float(min(max(hw + 2, cx), iw - hw - 2))
+    by = float(min(max(hh + 2, cy), ih - hh - 2))
+
+    # Pentagon vertices centred on (bx, by), arrow tip points right at 0°
+    raw_pts = [
+        (bx - hw,         by - hh),
+        (bx + hw - tip,   by - hh),
+        (bx + hw,         by),
+        (bx + hw - tip,   by + hh),
+        (bx - hw,         by + hh),
+    ]
+    pts = [_rotate_pt(px, py, bx, by, rotation) for px, py in raw_pts]
+    draw.polygon(pts, fill=BADGE_FILL)
+
+    # Number centred at (bx, by), also rotated — use a small sub-image for text rotation
+    text = str(number)
     try:
         font = ImageFont.truetype(
             "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", FONT_SIZE
@@ -70,28 +100,13 @@ def _draw_callout(
         font = ImageFont.load_default()
 
     bbox = draw.textbbox((0, 0), text, font=font)
-    tw = bbox[2] - bbox[0]
-    th = bbox[3] - bbox[1]
-
-    rw = tw + BADGE_PAD_X * 2
-    rh = th + BADGE_PAD_Y * 2
-
-    # Clamp so badge stays within image bounds
-    rx = min(max(0, cx - rw // 2), iw - rw)
-    ry = min(max(0, cy - rh // 2), ih - rh)
-
-    # White fill + red border
-    draw.rectangle(
-        [rx, ry, rx + rw, ry + rh],
-        fill=BADGE_FILL,
-        outline=BADGE_BORDER,
-        width=BADGE_BORDER_W,
-    )
-
-    # Red number centred inside the box
-    tx = rx + BADGE_PAD_X - bbox[0]
-    ty = ry + BADGE_PAD_Y - bbox[1]
-    draw.text((tx, ty), text, fill=BADGE_TEXT_C, font=font)
+    tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
+    # Draw text at unrotated position — for 0° rotation just centre it
+    tx, ty = bx - hw // 2 - tw // 2 + 2, by - th // 2
+    if rotation:
+        tx_r, ty_r = _rotate_pt(tx + tw / 2, ty + th / 2, bx, by, rotation)
+        tx, ty = tx_r - tw / 2, ty_r - th / 2
+    draw.text((tx, ty), text, fill=BADGE_TEXT, font=font)
 
 
 def render_annotated(
