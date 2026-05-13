@@ -21,7 +21,7 @@ Added `restart: unless-stopped` to `sop-api` and `sop-extractor` in `docker-comp
 Restructured DOCX export to match the Aged Debtor Process PDF reference:
 - TOC section order: 1 Procedure Description (with 5 sub-items) → 2 Training Prerequisites → 3 Software Applications → 4 Process Map → 5 Detailed Procedure → 6–13 post-sections → 14 SOP Author/Reviewer/Approver Certification
 - Removed orange bar under TOC heading
-- Auto-crop Windows taskbar from embedded screenshots (numpy brightness transition detection)
+- Auto-crop Windows taskbar (bottom) and application title bar (top) from embedded screenshots — detects dark bands via numpy brightness transitions, only crops within the expected OS-chrome zones (top 8% / bottom 12%)
 
 ### Enhancement — Callout Badge Rendering (annotator.py)
 
