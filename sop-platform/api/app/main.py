@@ -30,11 +30,21 @@ app = FastAPI(
 )
 
 # ── CORS ─────────────────────────────────────────────────────
-# Allow all origins in development; tighten to specific origins in production
+# Production origins are hardcoded so CORS always works regardless of
+# whether CORS_ORIGINS env var is loaded correctly by Docker Compose.
+# settings.cors_origins merges in any additional origins from the env var.
+_CORS_ORIGINS = list(dict.fromkeys([
+    "http://localhost:5173",
+    "http://localhost:3000",
+    "https://sopapp.cloudnavision.com",
+    "https://soptest.cloudnavision.com",
+] + settings.cors_origins))
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origins,
-    allow_origin_regex=r"https://.*\.cloudnavision\.com",
+    allow_origins=_CORS_ORIGINS,
+    # Regex covers all current and future *.cloudnavision.com subdomains
+    allow_origin_regex=r"https://[a-zA-Z0-9][a-zA-Z0-9\-]*\.cloudnavision\.com",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
