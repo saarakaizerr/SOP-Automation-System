@@ -20,12 +20,6 @@ from docx.enum.section import WD_SECTION
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.shared import Pt, Inches, RGBColor, Cm
-from lxml import etree
-
-# DrawingML namespace URIs for the floating corner shape
-_WP  = "http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"
-_DML = "http://schemas.openxmlformats.org/drawingml/2006/main"
-_WPS = "http://schemas.microsoft.com/office/word/2010/wordprocessingShape"
 
 
 # ── Brand colours (matching Aged Debtor / Starboard Hotels palette) ──────────
@@ -37,7 +31,7 @@ BORDER   = RGBColor(0xD1, 0xD5, 0xDB)   # table border
 
 TEMPLATE_PATH = Path("/data/templates/sop_template.docx")
 _VERSION_PATH = TEMPLATE_PATH.with_suffix(".version")
-_TEMPLATE_VERSION = "20"  # increment when template structure changes
+_TEMPLATE_VERSION = "21"  # increment when template structure changes
 
 _ASSETS_DIR = Path(__file__).parent / "assets"
 _HEADER_IMG = _ASSETS_DIR / "header1.jpg"
@@ -224,66 +218,17 @@ def _build_footer(section) -> None:
 
 def _add_corner_shape(para) -> None:
     """
-    Place header1.jpg as a floating image anchored to the page top-right corner.
-    The 4×4 cm image is positioned so its top and right edges overflow the page
-    boundary by 1 cm each — only the rounded bottom-left corner is visible inside
-    the page, matching the Infomate template brand mark.
+    Place header1.jpg inline, right-aligned, in the header paragraph.
+    Inline positioning is reliable across both Word and LibreOffice — floating
+    wp:anchor in a header paragraph gets anchor-associated with body paragraphs
+    by both renderers, causing the image to appear at body content level instead
+    of the header area.
     """
     if not _HEADER_IMG.exists():
         return
-
-    SIZE_EMU = int(Cm(4))      # 4 cm display size
-    POS_H    = int(Cm(18.5))   # 18.5 cm from page left → right edge at 22.5 cm (1.5 cm overflow)
-    POS_V    = -int(Cm(2))     # -2 cm from page top   → only 2 cm visible below top edge
-
-    # Add the image inline first so python-docx registers it in the header part
-    # relationships and embeds the correct rId in the pic:pic XML.
+    para.alignment = WD_ALIGN_PARAGRAPH.RIGHT
     r = para.add_run()
-    r.add_picture(str(_HEADER_IMG), width=Cm(4), height=Cm(4))
-
-    drawing = r._r.find(qn("w:drawing"))
-    if drawing is None:
-        return
-    inline = drawing.find(f"{{{_WP}}}inline")
-    if inline is None:
-        return
-
-    # Pull the key children out of inline — they carry the image rId
-    graphic = inline.find(f"{{{_DML}}}graphic")
-    doc_pr  = inline.find(f"{{{_WP}}}docPr")
-
-    # Build wp:anchor with absolute page-relative positioning
-    anchor = etree.Element(
-        f"{{{_WP}}}anchor",
-        distT="0", distB="0", distL="0", distR="0",
-        simplePos="0", relativeHeight="251659264",
-        behindDoc="0", locked="0", layoutInCell="1", allowOverlap="1",
-    )
-    etree.SubElement(anchor, f"{{{_WP}}}simplePos", x="0", y="0")
-
-    pos_h = etree.SubElement(anchor, f"{{{_WP}}}positionH", relativeFrom="page")
-    etree.SubElement(pos_h, f"{{{_WP}}}posOffset").text = str(POS_H)
-
-    pos_v = etree.SubElement(anchor, f"{{{_WP}}}positionV", relativeFrom="page")
-    etree.SubElement(pos_v, f"{{{_WP}}}posOffset").text = str(POS_V)
-
-    etree.SubElement(anchor, f"{{{_WP}}}extent", cx=str(SIZE_EMU), cy=str(SIZE_EMU))
-    etree.SubElement(anchor, f"{{{_WP}}}effectExtent", l="0", t="0", r="0", b="0")
-    etree.SubElement(anchor, f"{{{_WP}}}wrapNone")
-
-    if doc_pr is not None:
-        anchor.append(doc_pr)   # moves element (carries docPr id)
-    else:
-        etree.SubElement(anchor, f"{{{_WP}}}docPr", id="9001", name="HeaderImg", descr="")
-
-    etree.SubElement(anchor, f"{{{_WP}}}cNvGraphicFramePr")
-
-    if graphic is not None:
-        anchor.append(graphic)  # moves element (carries the rId reference)
-
-    # Swap inline → anchor inside the drawing element
-    drawing.remove(inline)
-    drawing.append(anchor)
+    r.add_picture(str(_HEADER_IMG), height=Cm(2))
 
 
 def _build_header(section) -> None:
