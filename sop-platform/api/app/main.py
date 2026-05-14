@@ -243,16 +243,35 @@ class _ProbeVideoRequest(BaseModel):
     azure_container: str
 
 
+async def _run_probe_job(job_id: str, body: _ProbeVideoRequest) -> None:
+    try:
+        async with httpx.AsyncClient(timeout=120.0) as client:
+            response = await client.post(
+                f"{settings.extractor_url}/api/probe-video",
+                json=body.model_dump(),
+            )
+            response.raise_for_status()
+            _jobs[job_id] = {"status": "completed", "result": response.json(), "error": None}
+    except Exception as exc:
+        _jobs[job_id] = {"status": "failed", "result": None, "error": str(exc)}
+
+
 @app.post("/api/probe-video", tags=["pipeline"], dependencies=[Depends(require_internal_key)])
 async def proxy_probe_video(body: _ProbeVideoRequest) -> Any:
-    """Synchronous proxy POST /api/probe-video → sop-extractor:8001/api/probe-video"""
-    async with httpx.AsyncClient(timeout=120.0) as client:
-        response = await client.post(
-            f"{settings.extractor_url}/api/probe-video",
-            json=body.model_dump(),
-        )
-        response.raise_for_status()
-        return response.json()
+    """Async proxy POST /api/probe-video → sop-extractor:8001/api/probe-video. Returns job_id immediately."""
+    job_id = str(uuid.uuid4())
+    _jobs[job_id] = {"status": "processing", "result": None, "error": None}
+    _spawn(_run_probe_job(job_id, body))
+    return {"job_id": job_id, "status": "processing"}
+
+
+@app.get("/api/probe-video/status/{job_id}", tags=["pipeline"], dependencies=[Depends(require_internal_key)])
+async def get_probe_status(job_id: str) -> Any:
+    """Poll probe-video job status. Returns {job_id, status: processing|completed|failed, result, error}"""
+    job = _jobs.get(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
+    return {"job_id": job_id, **job}
 
 
 # ── /api/split-video proxy ────────────────────────────────────
