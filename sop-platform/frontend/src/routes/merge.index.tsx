@@ -1,7 +1,7 @@
 ﻿import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { useState } from 'react'
-import { fetchMergeGroups, compareSops, fetchSOPs, sopKeys, createProcessGroup, deleteProcessGroup, renameSOP, deleteSOP } from '../api/client'
+import { useState, useEffect } from 'react'
+import { fetchMergeGroups, compareSops, fetchMergeSession, fetchSOPs, sopKeys, createProcessGroup, deleteProcessGroup, renameSOP, deleteSOP } from '../api/client'
 import { InlineLoader } from '../components/PageLoader'
 
 export const Route = createFileRoute('/merge/')({
@@ -24,6 +24,7 @@ function MergePage() {
   const [selectedSopIds, setSelectedSopIds] = useState<string[]>([])
   const [sopSearch, setSopSearch] = useState('')
   const [comparingCode, setComparingCode] = useState<string | null>(null)
+  const [pollingSessionId, setPollingSessionId] = useState<string | null>(null)
   const [confirmDeleteCode, setConfirmDeleteCode] = useState<string | null>(null)
   const [confirmDeleteSopId, setConfirmDeleteSopId] = useState<string | null>(null)
   const [renamingId, setRenamingId] = useState<string | null>(null)
@@ -47,15 +48,40 @@ function MergePage() {
     s.title.toLowerCase().includes(sopSearch.toLowerCase())
   )
 
+  // Poll session while status is "comparing"; navigate when "reviewing"
+  const { data: polledSession } = useQuery({
+    queryKey: ['merge-session-poll', pollingSessionId],
+    queryFn: () => fetchMergeSession(pollingSessionId!),
+    enabled: !!pollingSessionId,
+    refetchInterval: (query) => (query.state.data?.status === 'comparing' ? 3000 : false),
+    gcTime: 0,
+  })
+
+  useEffect(() => {
+    if (polledSession?.status === 'reviewing' && pollingSessionId) {
+      const id = pollingSessionId
+      setComparingCode(null)
+      setPollingSessionId(null)
+      navigate({ to: '/merge/$sessionId', params: { sessionId: id } })
+    }
+  }, [polledSession?.status, pollingSessionId, navigate])
+
   const compareMutation = useMutation({
     mutationFn: ({ base, updated, code }: { base: string; updated: string; code: string }) => {
       setComparingCode(code)
       return compareSops(base, updated)
     },
     onSuccess: (session) => {
-      if (session) navigate({ to: '/merge/$sessionId', params: { sessionId: session.session_id } })
+      if (!session) return
+      if (session.status === 'reviewing') {
+        setComparingCode(null)
+        navigate({ to: '/merge/$sessionId', params: { sessionId: session.session_id } })
+      } else {
+        // status === "comparing" — Gemini running in background, start polling
+        setPollingSessionId(session.session_id)
+      }
     },
-    onSettled: () => setComparingCode(null),
+    onError: () => setComparingCode(null),
   })
 
   const renameMutation = useMutation({

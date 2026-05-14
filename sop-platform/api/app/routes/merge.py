@@ -28,6 +28,34 @@ from app.schemas import (
 
 router = APIRouter(prefix="/api", tags=["merge"])
 
+_compare_tasks: set = set()
+
+
+async def _run_compare_job(session_id: uuid.UUID, base_steps: list, updated_steps: list) -> None:
+    """Background: call extractor compare-sops, update session when done."""
+    from app.database import AsyncSessionLocal
+    try:
+        async with httpx.AsyncClient(timeout=600.0) as client:
+            resp = await client.post(
+                f"{settings.extractor_url}/api/compare-sops",
+                json={"base_steps": base_steps, "updated_steps": updated_steps},
+            )
+            resp.raise_for_status()
+            diff_result = resp.json()
+        new_status = "reviewing"
+    except Exception as exc:
+        diff_result = {"error": str(exc)}
+        new_status = "failed"
+
+    async with AsyncSessionLocal() as db:
+        row = (await db.execute(
+            select(SOPMergeSession).where(SOPMergeSession.id == session_id)
+        )).scalar_one_or_none()
+        if row:
+            row.diff_result = diff_result
+            row.status = new_status
+            await db.commit()
+
 
 async def _copy_blob(
     src_url: str,
@@ -176,16 +204,16 @@ async def compare_sops(
     current_user: Annotated[User, Depends(require_editor)],
     db: AsyncSession = Depends(get_db),
 ) -> MergeSessionResponse:
-    """Trigger Gemini diff between two SOPs. Returns existing session if already started."""
+    """Trigger Gemini diff between two SOPs. Returns immediately; poll GET /merge/sessions/{id}."""
     base_id = uuid.UUID(body.base_sop_id)
     updated_id = uuid.UUID(body.updated_sop_id)
 
-    # Prevent duplicate active sessions
+    # Return in-progress or completed session if one already exists
     existing = (await db.execute(
         select(SOPMergeSession).where(
             SOPMergeSession.base_sop_id == base_id,
             SOPMergeSession.updated_sop_id == updated_id,
-            SOPMergeSession.status == "reviewing",
+            SOPMergeSession.status.in_(["comparing", "reviewing"]),
         )
     )).scalar_one_or_none()
 
@@ -224,39 +252,28 @@ async def compare_sops(
         for s in updated_sop.steps
     ]
 
-    # Call extractor /api/compare-sops
-    try:
-        async with httpx.AsyncClient(timeout=120.0) as client:
-            resp = await client.post(
-                f"{settings.extractor_url}/api/compare-sops",
-                json={"base_steps": base_steps, "updated_steps": updated_steps},
-            )
-            resp.raise_for_status()
-    except httpx.TimeoutException as exc:
-        raise HTTPException(status_code=503, detail="Comparison timed out") from exc
-    except Exception as exc:
-        raise HTTPException(status_code=503, detail=f"Extractor error: {exc}") from exc
-
-    diff_result = resp.json()
-
+    # Create session immediately with status="comparing", spawn background task
     session = SOPMergeSession(
         base_sop_id=base_id,
         updated_sop_id=updated_id,
         created_by=current_user.id,
-        status="reviewing",
-        diff_result=diff_result,
+        status="comparing",
+        diff_result=None,
     )
     db.add(session)
     await db.commit()
     await db.refresh(session)
 
-    matches = [MergeMatch(**m) for m in diff_result.get("matches", [])]
+    task = asyncio.create_task(_run_compare_job(session.id, base_steps, updated_steps))
+    _compare_tasks.add(task)
+    task.add_done_callback(_compare_tasks.discard)
+
     return MergeSessionResponse(
         session_id=str(session.id),
-        status=session.status,
+        status="comparing",
         base_sop_id=str(base_id),
         updated_sop_id=str(updated_id),
-        matches=matches,
+        matches=[],
     )
 
 
