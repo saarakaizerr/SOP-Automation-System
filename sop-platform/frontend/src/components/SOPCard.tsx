@@ -9,21 +9,21 @@ import { useAuthContext } from '../contexts/AuthContext'
 interface Props { sop: SOPListItem }
 
 const TAG_COLOR_MAP: Record<string, string> = {
-  blue:   'bg-blue-500/10 text-blue-400 border-blue-500/20',
-  purple: 'bg-purple-500/10 text-purple-400 border-purple-500/20',
-  green:  'bg-green-500/10 text-green-400 border-green-500/20',
-  orange: 'bg-orange-500/10 text-orange-400 border-orange-500/20',
-  pink:   'bg-pink-500/10 text-pink-400 border-pink-500/20',
-  teal:   'bg-teal-500/10 text-teal-400 border-teal-500/20',
-  indigo: 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20',
-  rose:   'bg-rose-500/10 text-rose-400 border-rose-500/20',
-  amber:  'bg-amber-500/10 text-amber-400 border-amber-500/20',
-  cyan:   'bg-cyan-500/10 text-cyan-400 border-cyan-500/20',
+  blue:   'bg-blue-500/12 text-blue-600 border-blue-500/30',
+  purple: 'bg-purple-500/12 text-purple-600 border-purple-500/30',
+  green:  'bg-green-500/12 text-green-600 border-green-500/30',
+  orange: 'bg-orange-500/12 text-orange-600 border-orange-500/30',
+  pink:   'bg-pink-500/12 text-pink-600 border-pink-500/30',
+  teal:   'bg-teal-500/12 text-teal-600 border-teal-500/30',
+  indigo: 'bg-indigo-500/12 text-indigo-600 border-indigo-500/30',
+  rose:   'bg-rose-500/12 text-rose-600 border-rose-500/30',
+  amber:  'bg-amber-500/12 text-amber-600 border-amber-500/30',
+  cyan:   'bg-cyan-500/12 text-cyan-600 border-cyan-500/30',
 }
 const TAG_DOT_MAP: Record<string, string> = {
-  blue: 'bg-blue-400', purple: 'bg-purple-400', green: 'bg-green-400',
-  orange: 'bg-orange-400', pink: 'bg-pink-400', teal: 'bg-teal-400',
-  indigo: 'bg-indigo-400', rose: 'bg-rose-400', amber: 'bg-amber-400', cyan: 'bg-cyan-400',
+  blue: 'bg-blue-500', purple: 'bg-purple-500', green: 'bg-green-500',
+  orange: 'bg-orange-500', pink: 'bg-pink-500', teal: 'bg-teal-500',
+  indigo: 'bg-indigo-500', rose: 'bg-rose-500', amber: 'bg-amber-500', cyan: 'bg-cyan-500',
 }
 const TAG_COLOR_KEYS = Object.keys(TAG_COLOR_MAP)
 function tagClasses(color: string) { return TAG_COLOR_MAP[color] ?? TAG_COLOR_MAP.blue }
@@ -44,40 +44,40 @@ const statusConfig: Record<SOPStatus, {
 }> = {
   processing: {
     label: 'In Processing',
-    heroBg: 'from-violet-500/10 to-indigo-500/5',
+    heroBg: 'from-violet-500/12 to-indigo-500/6',
     borderLeft: 'border-l-violet-500',
-    badge: 'bg-violet-500/15 text-violet-400 border-violet-500/25',
-    dot: 'bg-violet-400 animate-pulse',
+    badge: 'bg-violet-500/15 text-violet-600 border-violet-500/30',
+    dot: 'bg-violet-500 animate-pulse',
     hoverShadow: 'hover:shadow-violet-500/15',
     hoverBorder: 'hover:border-violet-500/40',
     progressBar: 'from-violet-500 to-indigo-400',
   },
   draft: {
     label: 'Draft',
-    heroBg: 'from-amber-500/8 to-orange-500/4',
+    heroBg: 'from-amber-500/12 to-orange-500/6',
     borderLeft: 'border-l-amber-500',
-    badge: 'bg-amber-500/15 text-amber-400 border-amber-500/25',
-    dot: 'bg-amber-400',
-    hoverShadow: 'hover:shadow-amber-400/10',
-    hoverBorder: 'hover:border-amber-400/30',
+    badge: 'bg-amber-500/15 text-amber-600 border-amber-500/30',
+    dot: 'bg-amber-500',
+    hoverShadow: 'hover:shadow-amber-500/15',
+    hoverBorder: 'hover:border-amber-500/30',
     progressBar: 'from-amber-500 to-orange-400',
   },
   in_review: {
     label: 'In Review',
-    heroBg: 'from-blue-500/10 to-cyan-500/5',
+    heroBg: 'from-blue-500/12 to-cyan-500/6',
     borderLeft: 'border-l-blue-500',
-    badge: 'bg-blue-500/15 text-blue-400 border-blue-500/25',
-    dot: 'bg-blue-400',
+    badge: 'bg-blue-500/15 text-blue-600 border-blue-500/30',
+    dot: 'bg-blue-500',
     hoverShadow: 'hover:shadow-blue-500/15',
     hoverBorder: 'hover:border-blue-500/40',
     progressBar: 'from-blue-500 to-cyan-400',
   },
   published: {
     label: 'Published',
-    heroBg: 'from-emerald-500/10 to-teal-500/5',
+    heroBg: 'from-emerald-500/12 to-teal-500/6',
     borderLeft: 'border-l-emerald-500',
-    badge: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/25',
-    dot: 'bg-emerald-400',
+    badge: 'bg-emerald-500/15 text-emerald-600 border-emerald-500/30',
+    dot: 'bg-emerald-500',
     hoverShadow: 'hover:shadow-emerald-500/15',
     hoverBorder: 'hover:border-emerald-500/40',
     progressBar: 'from-emerald-500 to-teal-400',
@@ -85,7 +85,7 @@ const statusConfig: Record<SOPStatus, {
   archived: {
     label: 'Archived',
     heroBg: 'from-gray-500/8 to-gray-600/4',
-    borderLeft: 'border-l-gray-500',
+    borderLeft: 'border-l-gray-400',
     badge: 'bg-raised text-muted border-default',
     dot: 'bg-gray-400',
     hoverShadow: 'hover:shadow-gray-400/10',
@@ -253,7 +253,7 @@ export function SOPCard({ sop }: Props) {
               </div>
             </div>
             {/* Stage label */}
-            <span className="text-[9px] text-violet-400 font-medium text-center leading-tight max-w-[52px] truncate">
+            <span className="text-[9px] text-violet-600 font-medium text-center leading-tight max-w-[52px] truncate">
               {(sop.pipeline_status || '').replace(/_/g, ' ')}
             </span>
           </div>
