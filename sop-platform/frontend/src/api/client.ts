@@ -118,6 +118,7 @@ export const deleteStep = (stepId: string) => mutateAPI<null>(`/api/steps/${step
 export const createStep = (sopId: string, title: string) => mutateAPI<SOPStep>(`/api/sops/${sopId}/steps`, 'POST', { title })
 export const updateSOPStatus = (sopId: string, status: string) => mutateAPI<null>(`/api/sops/${sopId}/status`, 'PATCH', { status })
 export const renameStep = (stepId: string, title: string) => mutateAPI<SOPStep>(`/api/steps/${stepId}/rename`, 'PATCH', { title })
+export const updateStepDescription = (stepId: string, description: string) => mutateAPI<SOPStep>(`/api/steps/${stepId}/description`, 'PATCH', { description })
 export const updateSubSteps = (stepId: string, sub_steps: string[]) => mutateAPI<SOPStep>(`/api/steps/${stepId}/sub-steps`, 'PATCH', { sub_steps })
 export const fetchMetrics = (id: string) => fetchAPI<SOPMetrics>(`/api/sops/${id}/metrics`)
 export const trackView = (id: string) => mutateAPI<null>(`/api/sops/${id}/view`, 'POST')

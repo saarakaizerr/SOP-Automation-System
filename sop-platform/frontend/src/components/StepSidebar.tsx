@@ -1,4 +1,5 @@
-﻿import clsx from 'clsx'
+import { useState } from 'react'
+import clsx from 'clsx'
 import { useSOPStore } from '../hooks/useSOPStore'
 import type { SOPStep, SOPSection } from '../api/types'
 
@@ -8,11 +9,32 @@ interface Props {
   sopId: string
 }
 
+type Filter = 'all' | 'pending' | 'approved'
+
 export function StepSidebar({ steps, sections, sopId }: Props) {
   const { selectedStepId, setSelectedStep } = useSOPStore()
+  const [search, setSearch] = useState('')
+  const [filter, setFilter] = useState<Filter>('all')
+
+  const currentIndex = steps.findIndex(s => s.id === selectedStepId)
+  const canPrev = currentIndex > 0
+  const canNext = currentIndex >= 0 && currentIndex < steps.length - 1
+
+  const goPrev = () => { if (canPrev) setSelectedStep(steps[currentIndex - 1].id) }
+  const goNext = () => { if (canNext) setSelectedStep(steps[currentIndex + 1].id) }
 
   const approvedCount = steps.filter(s => s.is_approved).length
+  const pendingCount = steps.length - approvedCount
   const pct = steps.length > 0 ? Math.round((approvedCount / steps.length) * 100) : 0
+
+  const filtered = steps.filter(step => {
+    const matchesSearch = !search || step.title.toLowerCase().includes(search.toLowerCase())
+    const matchesFilter =
+      filter === 'all' ||
+      (filter === 'approved' && step.is_approved) ||
+      (filter === 'pending' && !step.is_approved)
+    return matchesSearch && matchesFilter
+  })
 
   return (
     <aside className="w-full shrink-0 overflow-hidden flex flex-col gap-2">
@@ -33,11 +55,11 @@ export function StepSidebar({ steps, sections, sopId }: Props) {
               {steps.length}
             </span>
           </div>
-          {/* Mini progress bar */}
+          {/* Progress bar */}
           <div className="flex items-center gap-2">
             <div className="flex-1 h-1.5 bg-blue-500/15 rounded-full overflow-hidden">
               <div
-                className={`h-full rounded-full transition-all ${pct === 100 ? 'bg-green-500' : 'bg-blue-500'}`}
+                className={`h-full rounded-full transition-all duration-500 ${pct === 100 ? 'bg-green-500' : 'bg-blue-500'}`}
                 style={{ width: `${pct}%` }}
               />
             </div>
@@ -45,9 +67,68 @@ export function StepSidebar({ steps, sections, sopId }: Props) {
           </div>
         </div>
 
+        {/* Search input */}
+        <div className="px-3 pt-2.5 pb-1">
+          <div className="relative">
+            <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-muted pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 105 11a6 6 0 0012 0z"/>
+            </svg>
+            <input
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Search steps…"
+              className="w-full text-xs bg-page text-secondary border border-default rounded-lg pl-7 pr-2 py-1.5 outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400/30 placeholder:text-muted"
+            />
+            {search && (
+              <button
+                onClick={() => setSearch('')}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted hover:text-secondary"
+              >
+                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Filter tabs */}
+        <div className="flex gap-1 px-3 pb-2">
+          {([['all', 'All', steps.length], ['pending', 'Pending', pendingCount], ['approved', 'Done', approvedCount]] as const).map(([key, label, count]) => (
+            <button
+              key={key}
+              onClick={() => setFilter(key)}
+              className={clsx(
+                'flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border font-medium transition-all',
+                filter === key
+                  ? key === 'approved'
+                    ? 'bg-green-500/15 border-green-500/30 text-green-600'
+                    : key === 'pending'
+                    ? 'bg-amber-500/15 border-amber-500/30 text-amber-600'
+                    : 'bg-blue-500/15 border-blue-500/30 text-blue-600'
+                  : 'border-transparent text-muted hover:text-secondary hover:bg-raised',
+              )}
+            >
+              {label}
+              <span className={clsx(
+                'text-[10px] font-bold px-1 py-0 rounded-full',
+                filter === key
+                  ? key === 'approved' ? 'bg-green-500/20' : key === 'pending' ? 'bg-amber-500/20' : 'bg-blue-500/20'
+                  : 'bg-raised',
+              )}>
+                {count}
+              </span>
+            </button>
+          ))}
+        </div>
+
         {/* Steps list */}
         <ul className="overflow-y-auto max-h-[40vh]">
-          {steps.map((step) => {
+          {filtered.length === 0 ? (
+            <li className="px-4 py-6 text-center">
+              <p className="text-xs text-muted">No steps match</p>
+            </li>
+          ) : filtered.map((step) => {
             const isActive = step.id === selectedStepId
             return (
               <li key={step.id}>
@@ -89,6 +170,30 @@ export function StepSidebar({ steps, sections, sopId }: Props) {
             )
           })}
         </ul>
+
+        {/* Navigation buttons */}
+        <div className="px-3 py-2 border-t border-subtle bg-page/60 flex items-center gap-2">
+          <button
+            onClick={goPrev}
+            disabled={!canPrev}
+            className="flex-1 flex items-center justify-center gap-1 py-1.5 rounded-lg border border-default text-xs text-muted hover:bg-raised hover:text-blue-600 hover:border-blue-300 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7"/>
+            </svg>
+            Prev
+          </button>
+          <button
+            onClick={goNext}
+            disabled={!canNext}
+            className="flex-1 flex items-center justify-center gap-1 py-1.5 rounded-lg border border-default text-xs text-muted hover:bg-raised hover:text-blue-600 hover:border-blue-300 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+          >
+            Next
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7"/>
+            </svg>
+          </button>
+        </div>
       </div>
 
       {/* ── Sections card ── */}

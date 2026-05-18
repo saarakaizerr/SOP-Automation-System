@@ -1,8 +1,8 @@
-﻿import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import type { SOPStep, TranscriptLine } from '../api/types'
 import { useAuth } from '../hooks/useAuth'
-import { approveStep, renameStep, updateSubSteps, deleteStep, sopKeys } from '../api/client'
+import { approveStep, renameStep, updateSubSteps, updateStepDescription, deleteStep, sopKeys } from '../api/client'
 import { CalloutList } from './CalloutList'
 import { DiscussionCard } from './DiscussionCard'
 import { ScreenshotModal } from './ScreenshotModal'
@@ -13,6 +13,10 @@ interface Props {
   transcriptLines: TranscriptLine[]
   onSeek: (seconds: number) => void
   onDelete?: (stepId: string) => void
+  onPrev?: () => void
+  onNext?: () => void
+  currentIndex?: number
+  totalSteps?: number
 }
 
 function formatTime(s: number): string {
@@ -56,7 +60,7 @@ function Section({ icon, label, children, accent = 'gray' }: {
   )
 }
 
-export function StepCard({ step, transcriptLines, onSeek, onDelete }: Props) {
+export function StepCard({ step, transcriptLines, onSeek, onDelete, onPrev, onNext, currentIndex, totalSteps }: Props) {
   const [modalOpen, setModalOpen] = useState(false)
   const [editorOpen, setEditorOpen] = useState(false)
   const [renamingTitle, setRenamingTitle] = useState(false)
@@ -64,6 +68,9 @@ export function StepCard({ step, transcriptLines, onSeek, onDelete }: Props) {
   const titleInputRef = useRef<HTMLInputElement>(null)
   const [editingSubSteps, setEditingSubSteps] = useState(false)
   const [subStepInputs, setSubStepInputs] = useState<string[]>([])
+  const [editingDesc, setEditingDesc] = useState(false)
+  const [descInput, setDescInput] = useState('')
+  const descRef = useRef<HTMLTextAreaElement>(null)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const { appUser } = useAuth()
   const qc = useQueryClient()
@@ -84,6 +91,10 @@ export function StepCard({ step, transcriptLines, onSeek, onDelete }: Props) {
     mutationFn: (title: string) => renameStep(step!.id, title),
     onSuccess: (u) => { updateCache(u); setRenamingTitle(false) },
   })
+  const descMutation = useMutation({
+    mutationFn: (desc: string) => updateStepDescription(step!.id, desc),
+    onSuccess: (u) => { updateCache(u); setEditingDesc(false) },
+  })
   const approveMutation = useMutation({
     mutationFn: () => approveStep(step!.id),
     onSuccess: (u) => {
@@ -91,7 +102,6 @@ export function StepCard({ step, transcriptLines, onSeek, onDelete }: Props) {
       if (u) qc.invalidateQueries({ queryKey: sopKeys.metrics(u.sop_id) })
     },
   })
-
   const deleteMutation = useMutation({
     mutationFn: () => deleteStep(step!.id),
     onSuccess: () => {
@@ -107,6 +117,21 @@ export function StepCard({ step, transcriptLines, onSeek, onDelete }: Props) {
       titleInputRef.current.select()
     }
   }, [renamingTitle])
+
+  useEffect(() => {
+    if (editingDesc && descRef.current) {
+      descRef.current.focus()
+      descRef.current.setSelectionRange(descRef.current.value.length, descRef.current.value.length)
+    }
+  }, [editingDesc])
+
+  // Reset editing states when step changes
+  useEffect(() => {
+    setRenamingTitle(false)
+    setEditingDesc(false)
+    setEditingSubSteps(false)
+    setConfirmDelete(false)
+  }, [step?.id])
 
   if (!step) {
     return (
@@ -134,6 +159,35 @@ export function StepCard({ step, transcriptLines, onSeek, onDelete }: Props) {
     <div className="bg-card rounded-xl shadow-sm border border-subtle overflow-y-auto h-full flex flex-col">
       {/* ── Step header ──────────────────────────────────────────── */}
       <div className="px-4 pt-3 pb-2.5 border-b border-subtle shrink-0">
+        {/* Navigation row */}
+        {totalSteps !== undefined && currentIndex !== undefined && (
+          <div className="flex items-center justify-between mb-2.5">
+            <button
+              onClick={onPrev}
+              disabled={currentIndex <= 0}
+              className="flex items-center gap-1 text-xs text-muted hover:text-blue-600 disabled:opacity-30 disabled:cursor-not-allowed transition-colors px-2 py-1 rounded-lg hover:bg-blue-500/10"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7"/>
+              </svg>
+              Prev
+            </button>
+            <span className="text-xs text-muted font-medium">
+              Step <span className="text-default font-semibold">{currentIndex + 1}</span> of {totalSteps}
+            </span>
+            <button
+              onClick={onNext}
+              disabled={currentIndex >= totalSteps - 1}
+              className="flex items-center gap-1 text-xs text-muted hover:text-blue-600 disabled:opacity-30 disabled:cursor-not-allowed transition-colors px-2 py-1 rounded-lg hover:bg-blue-500/10"
+            >
+              Next
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7"/>
+              </svg>
+            </button>
+          </div>
+        )}
+
         <div className="flex items-start gap-3">
           {/* Number badge */}
           <span className={`shrink-0 w-9 h-9 rounded-xl flex items-center justify-center text-sm font-bold shadow-sm ${
@@ -202,9 +256,60 @@ export function StepCard({ step, transcriptLines, onSeek, onDelete }: Props) {
       <div className="flex-1 overflow-y-auto px-4 py-3 space-y-4">
 
         {/* Description */}
-        {step.description && (
-          <p className="text-sm text-secondary leading-relaxed">{step.description}</p>
-        )}
+        <div>
+          {editingDesc ? (
+            <div className="space-y-2">
+              <textarea
+                ref={descRef}
+                value={descInput}
+                onChange={e => setDescInput(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Escape') setEditingDesc(false)
+                  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) descMutation.mutate(descInput.trim())
+                }}
+                rows={4}
+                placeholder="Describe this step…"
+                className="w-full text-sm bg-input text-secondary border border-violet-300 rounded-lg px-3 py-2 outline-none focus:ring-1 focus:ring-violet-400/50 resize-none leading-relaxed"
+              />
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => descMutation.mutate(descInput.trim())}
+                  disabled={descMutation.isPending}
+                  className="text-xs px-3 py-1.5 bg-violet-600 text-white rounded-lg hover:bg-violet-700 disabled:opacity-50 font-medium"
+                >
+                  {descMutation.isPending ? 'Saving…' : 'Save'}
+                </button>
+                <button onClick={() => setEditingDesc(false)} className="text-xs px-3 py-1.5 border border-default rounded-lg text-muted hover:bg-raised">Cancel</button>
+                <span className="text-[10px] text-muted ml-auto">Ctrl+Enter to save</span>
+              </div>
+            </div>
+          ) : step.description ? (
+            <div className="group relative">
+              <p className="text-sm text-secondary leading-relaxed">{step.description}</p>
+              {canEdit && (
+                <button
+                  onClick={() => { setDescInput(step.description ?? ''); setEditingDesc(true) }}
+                  className="absolute top-0 right-0 opacity-0 group-hover:opacity-100 text-gray-300 hover:text-violet-500 transition-all"
+                  title="Edit description"
+                >
+                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/>
+                  </svg>
+                </button>
+              )}
+            </div>
+          ) : canEdit ? (
+            <button
+              onClick={() => { setDescInput(''); setEditingDesc(true) }}
+              className="text-xs text-muted hover:text-violet-500 flex items-center gap-1 transition-colors border border-dashed border-default rounded-lg px-3 py-2 w-full"
+            >
+              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4"/>
+              </svg>
+              Add description…
+            </button>
+          ) : null}
+        </div>
 
         {/* Screenshot */}
         {screenshotUrl && (

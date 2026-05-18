@@ -1,6 +1,6 @@
-﻿import { createFileRoute, useParams } from '@tanstack/react-router'
+import { createFileRoute, useParams } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
-import { useEffect } from 'react'
+import { useEffect, useCallback } from 'react'
 import { useSOPStore } from '../hooks/useSOPStore'
 import { useStepSync } from '../hooks/useStepSync'
 import { StepSidebar } from '../components/StepSidebar'
@@ -31,14 +31,39 @@ function ProcedurePage() {
   const { selectedStepId, setSelectedStep } = useSOPStore()
   const { playerRef, handleTimeUpdate, seekTo } = useStepSync(sop?.steps ?? [])
 
-  const selectedStep = sop?.steps.find((s) => s.id === selectedStepId) ?? null
+  const steps = sop?.steps ?? []
+  const currentIndex = steps.findIndex(s => s.id === selectedStepId)
+  const selectedStep = currentIndex >= 0 ? steps[currentIndex] : null
+
+  const goToPrev = useCallback(() => {
+    if (currentIndex > 0) setSelectedStep(steps[currentIndex - 1].id)
+  }, [currentIndex, steps, setSelectedStep])
+
+  const goToNext = useCallback(() => {
+    if (currentIndex < steps.length - 1) setSelectedStep(steps[currentIndex + 1].id)
+  }, [currentIndex, steps, setSelectedStep])
 
   function handleStepDeleted(deletedId: string) {
-    const steps = sop?.steps ?? []
     const idx = steps.findIndex(s => s.id === deletedId)
     const next = steps[idx + 1] ?? steps[idx - 1] ?? null
     setSelectedStep(next?.id ?? null)
   }
+
+  // Keyboard arrow navigation
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
+      if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+        e.preventDefault()
+        goToNext()
+      } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+        e.preventDefault()
+        goToPrev()
+      }
+    }
+    window.addEventListener('keydown', handleKey)
+    return () => window.removeEventListener('keydown', handleKey)
+  }, [goToPrev, goToNext])
 
   useEffect(() => {
     const key = `sop_viewed_${id}`
@@ -87,6 +112,10 @@ function ProcedurePage() {
             transcriptLines={transcriptLines}
             onSeek={seekTo}
             onDelete={handleStepDeleted}
+            onPrev={goToPrev}
+            onNext={goToNext}
+            currentIndex={currentIndex >= 0 ? currentIndex : undefined}
+            totalSteps={steps.length}
           />
         </div>
       </div>

@@ -285,6 +285,33 @@ async def update_sub_steps(
     return StepSchema.model_validate(step)
 
 
+@router.patch("/steps/{step_id}/description", response_model=StepSchema)
+async def update_description(
+    step_id: UUID,
+    body: dict,
+    current_user: Annotated[User, Depends(require_editor)],
+    db: AsyncSession = Depends(get_db),
+):
+    """Update a step description. Editor/Admin only."""
+    description = (body.get("description") or "").strip() or None
+
+    stmt = (
+        select(SOPStep)
+        .where(SOPStep.id == step_id)
+        .options(selectinload(SOPStep.callouts), selectinload(SOPStep.clips), selectinload(SOPStep.discussions))
+    )
+    step = (await db.execute(stmt)).scalar_one_or_none()
+    if step is None:
+        raise HTTPException(status_code=404, detail=f"Step {step_id} not found")
+
+    step.description = description
+    await _log(db, step.sop_id, current_user.id, "edit",
+               f"Step {step.sequence} description updated", step.title)
+    await db.commit()
+    await db.refresh(step)
+    return StepSchema.model_validate(step)
+
+
 @router.patch("/steps/{step_id}/rename", response_model=StepSchema)
 async def rename_step(
     step_id: UUID,

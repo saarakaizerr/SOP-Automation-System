@@ -84,30 +84,40 @@ export function VideoPlayer({ step, sopVideoUrl, playerRef, onTimeUpdate }: Prop
   return (
     <div className="bg-card rounded-lg shadow-sm border border-subtle overflow-hidden shrink-0">
       <div className="flex items-center justify-between px-4 py-2 border-b border-subtle bg-page">
-        <div className="flex items-center gap-1.5">
-          <span className={`w-5 h-5 rounded flex items-center justify-center shrink-0 ${videoMode === 'clip' ? 'bg-blue-100' : 'bg-violet-100'}`}>
-            {videoMode === 'clip' ? (
-              <svg viewBox="0 0 12 12" fill="currentColor" className="w-3 h-3 text-blue-500">
-                <path d="M2 2a1 1 0 00-1 1v6a1 1 0 001 1h6a1 1 0 001-1V3a1 1 0 00-1-1H2zm7.5 1.5l2-1.5v8l-2-1.5V3.5z"/>
-              </svg>
-            ) : (
-              <svg viewBox="0 0 12 12" fill="currentColor" className="w-3 h-3 text-violet-500">
-                <path d="M2 2a1 1 0 00-1 1v6a1 1 0 001 1h8a1 1 0 001-1V3a1 1 0 00-1-1H2zm7.5 1.5l1.5-1v7l-1.5-1V3.5z"/>
-              </svg>
-            )}
-          </span>
-          <span className="text-xs font-bold uppercase tracking-wide text-muted">
-            {videoMode === 'clip' ? 'Step Clip' : 'Full Recording'}
-          </span>
+        <span className="text-xs font-bold uppercase tracking-wide text-muted">
+          {videoMode === 'clip' ? 'Step Clip' : 'Full Recording'}
+        </span>
+        {/* Pill toggle */}
+        <div className="flex items-center bg-raised border border-default rounded-lg p-0.5 gap-0.5">
+          <button
+            onClick={() => setVideoMode('clip')}
+            className={`flex items-center gap-1 text-xs px-2.5 py-1 rounded-md font-medium transition-all ${
+              videoMode === 'clip'
+                ? 'bg-blue-600 text-white shadow-sm'
+                : 'text-muted hover:text-secondary'
+            }`}
+          >
+            <svg viewBox="0 0 12 12" fill="currentColor" className="w-3 h-3">
+              <path d="M2 2a1 1 0 00-1 1v6a1 1 0 001 1h6a1 1 0 001-1V3a1 1 0 00-1-1H2zm7.5 1.5l2-1.5v8l-2-1.5V3.5z"/>
+            </svg>
+            Clip
+          </button>
+          <button
+            onClick={() => setVideoMode('full')}
+            disabled={!hasFullVideo}
+            title={!hasFullVideo ? 'Full video not available' : undefined}
+            className={`flex items-center gap-1 text-xs px-2.5 py-1 rounded-md font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
+              videoMode === 'full'
+                ? 'bg-violet-600 text-white shadow-sm'
+                : 'text-muted hover:text-secondary'
+            }`}
+          >
+            <svg viewBox="0 0 12 12" fill="currentColor" className="w-3 h-3">
+              <path d="M2 2a1 1 0 00-1 1v6a1 1 0 001 1h8a1 1 0 001-1V3a1 1 0 00-1-1H2zm7.5 1.5l1.5-1v7l-1.5-1V3.5z"/>
+            </svg>
+            Full
+          </button>
         </div>
-        <button
-          onClick={() => setVideoMode(videoMode === 'clip' ? 'full' : 'clip')}
-          disabled={!hasFullVideo && videoMode === 'clip'}
-          title={!hasFullVideo ? 'Full video not available' : undefined}
-          className="text-xs px-3 py-1 rounded-lg border border-default text-muted hover:bg-raised hover:shadow-sm disabled:opacity-40 disabled:cursor-not-allowed transition-all font-medium"
-        >
-          {videoMode === 'clip' ? 'Switch to Full' : 'Switch to Clip'}
-        </button>
       </div>
       <div className="p-3">
         {/* Fixed height so transcript panel gets enough space below */}

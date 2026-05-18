@@ -455,7 +455,7 @@ def _build_context(tpl: DocxTemplate, sop_data: dict, tmp_dir: Path, table_regis
     }
 
 
-_COVER_TEMPLATE = Path(__file__).parent / "assets" / "cover_template2.jpg"
+_COVER_TEMPLATE = Path(__file__).parent / "assets" / "cover_template.jpg"
 
 
 def _generate_cover_page(
@@ -465,69 +465,19 @@ def _generate_cover_page(
     today: str,
 ) -> Optional[InlineImage]:
     """
-    Load the static Infomate cover template and overlay SOP title + date
-    in the gradient area to the right of the white panel.
-    Falls back to a fully-generated cover if the template file is missing.
-    Image is output to A4 text area width (6.3 inches).
+    Use the static cover template as-is, resized to A4 (2480×3508 px at 300 DPI).
+    The image fills the full page — section1 has zero margins.
     """
     try:
-        from PIL import Image, ImageDraw, ImageFont
+        from PIL import Image
 
-        # ── Load base template (or fall back to generated version) ───────────
         if _COVER_TEMPLATE.exists():
             img = Image.open(str(_COVER_TEMPLATE)).convert("RGB")
-            img = img.resize((2480, 3508), Image.LANCZOS)  # A4 at 300 DPI
         else:
             logger.warning("Cover template not found at %s — using generated fallback", _COVER_TEMPLATE)
             img = _build_cover_base()
 
-        W, H = img.size
-        draw = ImageDraw.Draw(img)
-
-        ORANGE   = (232, 92, 26)
-        TEXT_DIM = (215, 213, 235)
-
-        split_x  = int(W * 0.38)   # right edge of the white panel
-        right_pad = split_x + 40   # left margin for gradient-area text
-
-        # ── Fonts ─────────────────────────────────────────────────────────────
-        try:
-            fnt_italic = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Oblique.ttf", 26)
-            fnt_title  = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",    64)
-        except Exception:
-            fnt_italic = fnt_title = ImageFont.load_default()
-
-        def _bb(text, font):
-            bb = draw.textbbox((0, 0), text, font=font)
-            return bb[2] - bb[0], bb[3] - bb[1]
-
-        def _wrap(text, font, max_w):
-            words = text.split()
-            lines, cur = [], ""
-            for word in words:
-                test = f"{cur} {word}".strip()
-                if _bb(test, font)[0] > max_w and cur:
-                    lines.append(cur)
-                    cur = word
-                else:
-                    cur = test
-            if cur:
-                lines.append(cur)
-            return lines
-
-        # ── SOP title (orange, large) overlaid on gradient area ───────────────
-        title_raw = sop_data.get("sop_title") or "Standard Operating Procedure"
-        title_lines = _wrap(f"SOP: {title_raw}", fnt_title, W - right_pad - 50)
-        title_y = int(H * 0.36)
-        for i, line in enumerate(title_lines):
-            draw.text((right_pad, title_y + i * 84), line, font=fnt_title, fill=ORANGE)
-
-        # ── Date below title ──────────────────────────────────────────────────
-        date_str = str(sop_data.get("meeting_date") or today)
-        draw.text(
-            (right_pad, title_y + len(title_lines) * 84 + 18),
-            date_str, font=fnt_italic, fill=TEXT_DIM,
-        )
+        img = img.resize((2480, 3508), Image.LANCZOS)
 
         cover_path = tmp_dir / "cover_page.jpg"
         img.save(str(cover_path), "JPEG", quality=95, optimize=True)
