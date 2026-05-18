@@ -20,12 +20,13 @@
 services:
 
   # ──────────────────────────────────────────────────────────
-  # Cloudflare Tunnel — dedicated container, independent lifecycle
+  # Cloudflare Tunnel — sidecar to sop-api (shares network namespace)
   # Profile "tunnel" — only starts in production (when --profile tunnel is passed)
   # Prevents crash-loop on dev machines without a tunnel token.
   #
-  # Cloudflare Zero Trust dashboard must route:
-  #   soptest.cloudnavision.com → http://sop-api:8000   (Docker DNS)
+  # network_mode: "service:sop-api" shares sop-api's network namespace so that
+  # "localhost:8000" inside this container IS sop-api's uvicorn — matching the
+  # Cloudflare Zero Trust dashboard origin: http://localhost:8000
   # ──────────────────────────────────────────────────────────
   sop-tunnel:
     image: cloudflare/cloudflared:latest
@@ -33,8 +34,7 @@ services:
     restart: always
     profiles: ["tunnel"]
     command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
-    networks:
-      - sop-network
+    network_mode: "service:sop-api"
     depends_on:
       sop-api:
         condition: service_healthy
