@@ -2,6 +2,42 @@
 
 ---
 
+## 2026-05-18
+
+### Bug Fix — Cloudflare Tunnel 502 / CORS Login Error (Local Docker)
+
+**Symptom**
+Login at `sopapp.cloudnavision.com` failed with a CORS error:
+```
+Access to fetch at 'https://soptest.cloudnavision.com/api/auth/me'
+from origin 'https://sopapp.cloudnavision.com' has been blocked by CORS policy
+```
+All requests to `soptest.cloudnavision.com` returned 502 Bad Gateway, so no CORS headers were ever sent back.
+
+**Root Cause**
+The Cloudflare Zero Trust dashboard routes `soptest.cloudnavision.com` to origin `http://localhost:8000`. Inside a Docker container, `localhost` resolves to the container's **own** loopback interface — not the host machine and not any other container. The `sop-tunnel` container had `sop-api` as a dependency but ran in its own separate network namespace, so `localhost:8000` inside the tunnel container had nothing listening → connection refused → 502.
+
+**Fix**
+Changed `sop-tunnel` from a standalone container on the shared bridge network to a **sidecar** that shares `sop-api`'s network namespace:
+
+```yaml
+# Before
+sop-tunnel:
+  networks:
+    - sop-network
+
+# After
+sop-tunnel:
+  network_mode: "service:sop-api"
+```
+
+With `network_mode: "service:sop-api"`, the tunnel container shares the exact same network namespace as `sop-api`. `localhost:8000` inside `cloudflared` now IS sop-api's uvicorn port directly — matching the fixed Cloudflare dashboard origin exactly.
+
+**Verification**
+Tunnel logs show 4 connections registered with no "connection refused" errors. Login at `sopapp.cloudnavision.com` completes successfully.
+
+---
+
 ## 2026-05-13
 
 ### Bug Fix — WF0 502 on probe-video (intermittent, rebuild window)
