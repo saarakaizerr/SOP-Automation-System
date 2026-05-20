@@ -9,6 +9,9 @@ import { PageLoader, PageError } from '../components/PageLoader'
 import type { SOPListItem, SOPStatus } from '../api/types'
 import clsx from 'clsx'
 
+// SharePoint folder where KT recordings are dropped for processing
+const SHAREPOINT_FOLDER_URL = 'https://cloudnavision.sharepoint.com/:f:/s/Saara/IgDumHODYUvpSILccBd2mdIRAYJ6Z3VifBDyslol_HufFUg?e=9Dn5AN'
+
 export const Route = createFileRoute('/dashboard')({
   component: () => (
     <ProtectedRoute requiredRole="viewer">
@@ -310,15 +313,28 @@ function Dashboard() {
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-default">Dashboard</h1>
         {canMerge && (
-          <Link
-            to="/merge"
-            className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white text-sm font-semibold rounded-xl hover:bg-purple-700 active:scale-95 transition-all shadow-sm"
-          >
-            <svg viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
-              <path fillRule="evenodd" d="M5 3a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2V5a2 2 0 00-2-2H5zm0 8a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2v-2a2 2 0 00-2-2H5zm6-6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V5zm0 8a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" clipRule="evenodd"/>
-            </svg>
-            Merge SOPs
-          </Link>
+          <div className="flex items-center gap-2">
+            <a
+              href={SHAREPOINT_FOLDER_URL}
+              target="_blank"
+              rel="noreferrer"
+              className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white text-sm font-semibold rounded-xl hover:bg-green-700 active:scale-95 transition-all shadow-sm"
+            >
+              <svg viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+                <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd"/>
+              </svg>
+              New SOP
+            </a>
+            <Link
+              to="/merge"
+              className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white text-sm font-semibold rounded-xl hover:bg-purple-700 active:scale-95 transition-all shadow-sm"
+            >
+              <svg viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+                <path fillRule="evenodd" d="M5 3a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2V5a2 2 0 00-2-2H5zm0 8a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2v-2a2 2 0 00-2-2H5zm6-6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V5zm0 8a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" clipRule="evenodd"/>
+              </svg>
+              Merge SOPs
+            </Link>
+          </div>
         )}
       </div>
 
