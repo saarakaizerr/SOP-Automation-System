@@ -108,9 +108,40 @@ function avatarGrad(id: string) {
 }
 
 const PIPELINE_STAGES = [
-  'transcribing', 'detecting_screenshare', 'extracting_frames', 'deduplicating',
+  'queued', 'transcribing', 'detecting_screenshare', 'extracting_frames', 'deduplicating',
   'classifying_frames', 'generating_annotations', 'extracting_clips', 'generating_sections',
 ]
+
+// Groups stages by workflow so the timer resets once per workflow, not per stage
+const STAGE_WORKFLOW: Record<string, number> = {
+  queued:                 1, // WF0 — ingest & transcription
+  transcribing:           1,
+  detecting_screenshare:  2, // WF2 — frame extraction
+  extracting_frames:      2,
+  deduplicating:          2,
+  classifying_frames:     3, // WF3c — annotation
+  generating_annotations: 3,
+  extracting_clips:       4, // WF4 — clips
+  generating_sections:    5, // WF5b — SOP content
+}
+
+const STAGE_LABELS: Record<string, string> = {
+  queued:                 'Waiting to start…',
+  transcribing:           'Transcribing audio',
+  detecting_screenshare:  'Analysing screen recording',
+  extracting_frames:      'Capturing screenshots',
+  deduplicating:          'Capturing & filtering screenshots',
+  classifying_frames:     'Generating callouts',
+  generating_annotations: 'Creating video clips',
+  extracting_clips:       'Creating video clips',
+  generating_sections:    'Writing SOP content',
+}
+
+function formatElapsed(s: number) {
+  const m = Math.floor(s / 60)
+  const sec = s % 60
+  return `${m}:${String(sec).padStart(2, '0')}`
+}
 
 function Initials({ name }: { name: string }) {
   const words = name.trim().split(/\s+/).filter(w => /[a-zA-Z0-9]/.test(w[0]))
@@ -158,6 +189,45 @@ export function SOPCard({ sop }: Props) {
   const pipelinePct = pipelineIdx < 0 ? 5 : Math.round(((pipelineIdx + 1) / PIPELINE_STAGES.length) * 100)
   const ringCirc = 2 * Math.PI * 21
   const ringOffset = ringCirc * (1 - pipelinePct / 100)
+  const stageLabel = STAGE_LABELS[sop.pipeline_status ?? ''] ?? (sop.pipeline_status ?? '').replace(/_/g, ' ')
+
+  const [elapsed, setElapsed] = useState(0)
+  const tickRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const wfStartRef = useRef<number>(Date.now())
+
+  const currentWorkflow = STAGE_WORKFLOW[sop.pipeline_status ?? ''] ?? null
+  const storageKey = `wf_timer_${sop.id}`
+
+  useEffect(() => {
+    if (!isPipelineRunning) {
+      if (tickRef.current) { clearInterval(tickRef.current); tickRef.current = null }
+      sessionStorage.removeItem(storageKey)
+      return
+    }
+
+    // Restore or initialise the per-workflow start time
+    const stored = sessionStorage.getItem(storageKey)
+    const parsed = stored ? (JSON.parse(stored) as { workflow: number; startTime: number }) : null
+
+    let startTime: number
+    if (parsed && parsed.workflow === currentWorkflow) {
+      // Same workflow as before (or after a refresh) — resume from stored start
+      startTime = parsed.startTime
+    } else {
+      // New workflow started — reset
+      startTime = Date.now()
+      sessionStorage.setItem(storageKey, JSON.stringify({ workflow: currentWorkflow, startTime }))
+    }
+
+    wfStartRef.current = startTime
+    setElapsed(Math.floor((Date.now() - startTime) / 1000))
+
+    if (tickRef.current) clearInterval(tickRef.current)
+    tickRef.current = setInterval(() => {
+      setElapsed(Math.floor((Date.now() - wfStartRef.current) / 1000))
+    }, 1000)
+    return () => { if (tickRef.current) { clearInterval(tickRef.current); tickRef.current = null } }
+  }, [isPipelineRunning, currentWorkflow, storageKey])
 
   const cleanTitle = sop.title.replace(/\b\d{8}\s+\d{6}\b/g, '').replace(/\s{2,}/g, ' ').trim()
   const displayName = sop.process_name || cleanTitle
@@ -252,9 +322,9 @@ export function SOPCard({ sop }: Props) {
                 <Initials name={displayName} />
               </div>
             </div>
-            {/* Stage label */}
-            <span className="text-[9px] text-violet-600 font-medium text-center leading-tight max-w-[52px] truncate">
-              {(sop.pipeline_status || '').replace(/_/g, ' ')}
+            {/* Stage step */}
+            <span className="text-[9px] text-violet-600 font-medium text-center leading-tight tabular-nums">
+              {pipelinePct}%
             </span>
           </div>
         ) : (
@@ -295,8 +365,39 @@ export function SOPCard({ sop }: Props) {
         </svg>
       </div>
 
+      {/* ── Processing info row ──────────────────────────────────────────────── */}
+      {isPipelineRunning && (
+        <div className="px-4 py-2 flex items-center justify-between bg-violet-500/5 border-b border-violet-500/10 shrink-0 gap-2">
+          {/* Stage */}
+          <div className="flex items-center gap-1.5 min-w-0">
+            <svg className="w-3 h-3 text-violet-500 shrink-0 animate-spin" style={{ animationDuration: '3s' }} fill="none" viewBox="0 0 24 24">
+              <path stroke="currentColor" strokeWidth={2} strokeLinecap="round" d="M12 3a9 9 0 100 18A9 9 0 0012 3z" opacity={0.25}/>
+              <path stroke="currentColor" strokeWidth={2} strokeLinecap="round" d="M12 3a9 9 0 019 9"/>
+            </svg>
+            <span className="text-[11px] text-violet-600 font-semibold shrink-0 tabular-nums">
+              {pipelinePct}%
+            </span>
+            <span className="text-[11px] text-violet-500/70 truncate">
+              {stageLabel}
+            </span>
+          </div>
+          {/* Timer */}
+          {sop.pipeline_started_at && (
+            <div className="flex items-center gap-1 shrink-0">
+              <svg className="w-3 h-3 text-violet-400/70 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <circle cx="12" cy="12" r="9"/>
+                <path strokeLinecap="round" d="M12 7v5l3 3"/>
+              </svg>
+              <span className="text-[11px] text-violet-400 font-mono tabular-nums">
+                {formatElapsed(elapsed)}
+              </span>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* ── Tags — flex-1 fills remaining space so footer border-t stays aligned ── */}
-      <div className="flex-1 px-5 py-3" onClick={e => e.stopPropagation()}>
+      <div className="flex-1 px-5 py-2" onClick={e => e.stopPropagation()}>
         {(tags.length > 0 || canEdit) && (
           <div className="flex flex-wrap gap-1.5 items-center">
             {tags.map(tag => (

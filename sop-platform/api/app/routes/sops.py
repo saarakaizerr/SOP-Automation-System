@@ -53,12 +53,21 @@ async def list_sops(
         .correlate(SOP)
         .scalar_subquery()
     )
+    latest_run_started_at_subq = (
+        select(PipelineRun.started_at)
+        .where(PipelineRun.sop_id == SOP.id)
+        .order_by(PipelineRun.started_at.desc())
+        .limit(1)
+        .correlate(SOP)
+        .scalar_subquery()
+    )
 
     stmt = select(
         SOP,
         step_count_subq.label("step_count"),
         latest_run_status_subq.label("pipeline_status"),
         latest_run_stage_subq.label("pipeline_stage"),
+        latest_run_started_at_subq.label("pipeline_started_at"),
     ).order_by(SOP.created_at.desc())
 
     # Role-based visibility filter (applied before any explicit status query param)
@@ -69,6 +78,20 @@ async def list_sops(
     # Optional caller-supplied status filter (intersects with role visibility)
     if status is not None:
         stmt = stmt.where(SOP.status == status)
+
+    # Auto-heal: if pipeline_run is completed but SOP is still 'processing', flip to draft
+    await db.execute(
+        text("""
+            UPDATE sops
+            SET status = 'draft'
+            WHERE status = 'processing'
+              AND id IN (
+                SELECT DISTINCT sop_id FROM pipeline_runs
+                WHERE status = 'completed'
+              )
+        """)
+    )
+    await db.commit()
 
     rows = (await db.execute(stmt)).all()
     return [
@@ -83,6 +106,7 @@ async def list_sops(
             step_count=row[1] or 0,
             pipeline_status=str(row[2].value) if row[2] is not None else None,
             pipeline_stage=row[3],
+            pipeline_started_at=row[4],
             tags=row[0].tags or [],
             project_code=row[0].project_code,
             is_merged=row[0].is_merged,

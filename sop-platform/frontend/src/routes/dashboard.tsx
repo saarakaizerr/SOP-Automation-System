@@ -5,6 +5,7 @@ import { fetchSOPs, sopKeys } from '../api/client'
 import { SOPCard } from '../components/SOPCard'
 import { ProtectedRoute } from '../components/ProtectedRoute'
 import { useAuth } from '../hooks/useAuth'
+import { useRealtimePipeline } from '../hooks/useRealtimePipeline'
 import { PageLoader, PageError } from '../components/PageLoader'
 import type { SOPListItem, SOPStatus } from '../api/types'
 import clsx from 'clsx'
@@ -239,10 +240,16 @@ function Dashboard() {
   const { appUser } = useAuth()
   const canMerge = appUser?.role === 'editor' || appUser?.role === 'admin'
 
-  const { data: sops, isLoading, error } = useQuery({
+  const { data: sops, isLoading, isFetching, error, refetch } = useQuery({
     queryKey: sopKeys.all,
     queryFn: fetchSOPs,
+    refetchInterval: (query) => {
+      const data = query.state.data as SOPListItem[] | undefined
+      return data?.some(s => s.status === 'processing') ? 15000 : false
+    },
   })
+
+  useRealtimePipeline(sops ?? [])
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -311,31 +318,55 @@ function Dashboard() {
     <div className="space-y-5">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-default">Dashboard</h1>
-        {canMerge && (
-          <div className="flex items-center gap-2">
-            <a
-              href={SHAREPOINT_FOLDER_URL}
-              target="_blank"
-              rel="noreferrer"
-              className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white text-sm font-semibold rounded-xl hover:bg-green-700 active:scale-95 transition-all shadow-sm"
+        <div>
+          <h1 className="text-2xl font-bold text-default">Dashboard</h1>
+          <p className="text-xs text-muted mt-0.5">
+            {stats.processing > 0
+              ? `${stats.processing} SOP${stats.processing > 1 ? 's' : ''} currently processing`
+              : 'All SOPs up to date'}
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => refetch()}
+            disabled={isFetching}
+            title="Refresh SOPs"
+            className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-muted border border-subtle rounded-xl hover:bg-raised hover:text-default active:scale-95 transition-all disabled:opacity-50"
+          >
+            <svg
+              viewBox="0 0 20 20" fill="currentColor"
+              className={clsx('w-4 h-4', isFetching && 'animate-spin')}
             >
-              <svg viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
-                <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd"/>
-              </svg>
-              New SOP
-            </a>
-            <Link
-              to="/merge"
-              className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white text-sm font-semibold rounded-xl hover:bg-purple-700 active:scale-95 transition-all shadow-sm"
-            >
-              <svg viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
-                <path fillRule="evenodd" d="M5 3a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2V5a2 2 0 00-2-2H5zm0 8a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2v-2a2 2 0 00-2-2H5zm6-6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V5zm0 8a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" clipRule="evenodd"/>
-              </svg>
-              Merge SOPs
-            </Link>
-          </div>
-        )}
+              <path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clipRule="evenodd"/>
+            </svg>
+            Refresh
+          </button>
+          {canMerge && (
+            <>
+              <a
+                href={SHAREPOINT_FOLDER_URL}
+                target="_blank"
+                rel="noreferrer"
+                title="Upload a KT recording to SharePoint to start processing"
+                className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white text-sm font-semibold rounded-xl hover:bg-green-700 active:scale-95 transition-all shadow-sm"
+              >
+                <svg viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+                  <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd"/>
+                </svg>
+                New SOP
+              </a>
+              <Link
+                to="/merge"
+                className="flex items-center gap-2 px-4 py-2 bg-card border border-default text-secondary text-sm font-medium rounded-xl hover:text-default hover:border-violet-500/50 hover:bg-raised active:scale-95 transition-all"
+              >
+                <svg viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+                  <path fillRule="evenodd" d="M5 3a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2V5a2 2 0 00-2-2H5zm0 8a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2v-2a2 2 0 00-2-2H5zm6-6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V5zm0 8a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" clipRule="evenodd"/>
+                </svg>
+                Merge SOPs
+              </Link>
+            </>
+          )}
+        </div>
       </div>
 
       {/* Stats bar */}

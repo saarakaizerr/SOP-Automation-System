@@ -3,6 +3,7 @@ import { Link, Outlet, useRouterState } from '@tanstack/react-router'
 import clsx from 'clsx'
 import { useAuthContext } from '../contexts/AuthContext'
 import { useTheme, type Theme } from '../contexts/ThemeContext'
+import { useNotifications, type AppNotification } from '../contexts/NotificationContext'
 
 const ROLE_CONFIG: Record<'viewer' | 'editor' | 'admin', { label: string; classes: string; dot: string }> = {
   viewer: { label: 'Viewer', classes: 'bg-raised text-muted',              dot: 'bg-slate-400' },
@@ -72,6 +73,104 @@ function NavLink({ to, children }: { to: string; children: React.ReactNode }) {
         )}
       />
     </Link>
+  )
+}
+
+const NOTIF_ICON: Record<AppNotification['type'], { icon: string; bg: string; text: string }> = {
+  upload:   { icon: '📤', bg: 'bg-violet-500/10', text: 'text-violet-400' },
+  complete: { icon: '✅', bg: 'bg-emerald-500/10', text: 'text-emerald-400' },
+  error:    { icon: '❌', bg: 'bg-red-500/10',     text: 'text-red-400' },
+}
+
+function timeAgo(date: Date) {
+  const diff = Math.floor((Date.now() - date.getTime()) / 1000)
+  if (diff < 60) return 'just now'
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`
+  return date.toLocaleDateString()
+}
+
+function NotificationBell() {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  const { notifications, unreadCount, markAllRead, clearAll } = useNotifications()
+
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    if (open) document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [open])
+
+  function handleOpen() {
+    setOpen(v => !v)
+    if (!open) markAllRead()
+  }
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={handleOpen}
+        title="Notifications"
+        className={clsx(
+          'relative w-7 h-7 rounded-md flex items-center justify-center transition-all duration-150',
+          open ? 'bg-violet-500/15 text-violet-400' : 'text-muted hover:text-secondary hover:bg-raised',
+        )}
+      >
+        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6 6 0 10-12 0v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+        </svg>
+        {unreadCount > 0 && (
+          <span className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-violet-500 text-white text-[8px] font-bold flex items-center justify-center leading-none">
+            {unreadCount > 9 ? '9+' : unreadCount}
+          </span>
+        )}
+      </button>
+
+      {open && (
+        <div className="absolute right-0 top-full mt-3 w-80 z-50 bg-card border border-default rounded-2xl shadow-2xl overflow-hidden animate-fade-in-up">
+          {/* Header */}
+          <div className="flex items-center justify-between px-4 py-3 border-b border-subtle">
+            <span className="text-sm font-semibold text-default">Notifications</span>
+            {notifications.length > 0 && (
+              <button onClick={clearAll} className="text-[11px] text-muted hover:text-red-400 transition-colors">
+                Clear all
+              </button>
+            )}
+          </div>
+
+          {/* List */}
+          <div className="max-h-80 overflow-y-auto">
+            {notifications.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-10 text-muted gap-2">
+                <svg className="w-8 h-8 opacity-30" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6 6 0 10-12 0v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                </svg>
+                <span className="text-xs">No notifications yet</span>
+              </div>
+            ) : (
+              notifications.map(n => {
+                const cfg = NOTIF_ICON[n.type]
+                return (
+                  <div key={n.id} className={clsx('flex items-start gap-3 px-4 py-3 border-b border-subtle/50 last:border-0', !n.read && 'bg-violet-500/5')}>
+                    <div className={clsx('w-8 h-8 rounded-lg flex items-center justify-center shrink-0 text-sm', cfg.bg)}>
+                      {cfg.icon}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className={clsx('text-xs font-semibold', cfg.text)}>{n.title}</p>
+                      <p className="text-xs text-muted truncate mt-0.5">{n.body}</p>
+                      <p className="text-[10px] text-muted/60 mt-1">{timeAgo(n.timestamp)}</p>
+                    </div>
+                    {!n.read && <span className="w-2 h-2 rounded-full bg-violet-500 shrink-0 mt-1.5" />}
+                  </div>
+                )
+              })
+            )}
+          </div>
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -181,7 +280,7 @@ export function Layout() {
                   )}
                 </nav>
 
-                {/* Theme toggle */}
+                {/* Theme toggle + bell in one pill */}
                 <div className="flex items-center bg-raised border border-subtle rounded-lg p-0.5 gap-0.5">
                   {THEMES.map(({ value, label, Icon }) => (
                     <button
@@ -198,6 +297,8 @@ export function Layout() {
                       <Icon />
                     </button>
                   ))}
+                  <div className="w-px h-4 bg-subtle mx-0.5" />
+                  <NotificationBell />
                 </div>
 
                 {/* User menu */}

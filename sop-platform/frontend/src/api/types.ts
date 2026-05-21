@@ -225,6 +225,7 @@ export interface SOPListItem {
   step_count: number
   pipeline_status: string | null
   pipeline_stage: string | null
+  pipeline_started_at: string | null
   tags: SOPTag[]
   project_code: string | null
   is_merged: boolean

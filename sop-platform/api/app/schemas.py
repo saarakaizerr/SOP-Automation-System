@@ -232,6 +232,7 @@ class SOPListItem(BaseModel):
     step_count: int = 0
     pipeline_status: Optional[str] = None   # latest pipeline_runs.status
     pipeline_stage: Optional[str] = None    # latest pipeline_runs.current_stage
+    pipeline_started_at: Optional[datetime] = None  # latest pipeline_runs.started_at
     tags: list[dict] = []  # [{name: str, color: str}]
     project_code: Optional[str] = None
     is_merged: bool = False
