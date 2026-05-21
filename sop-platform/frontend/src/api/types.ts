@@ -184,6 +184,7 @@ export interface ExportHistoryItem {
   format: string
   file_size_bytes: number | null
   created_at: string
+  file_url: string | null
 }
 
 export interface LikerItem {

@@ -27,6 +27,7 @@ export function SOPPageHeader({ sop }: Props) {
   const [toast, setToast] = useState<{ msg: string; type: 'ok' | 'err' } | null>(null)
   const [exporting, setExporting] = useState<'docx' | 'pdf' | null>(null)
   const [statusOpen, setStatusOpen] = useState(false)
+  const [pdfPreview, setPdfPreview] = useState<{ url: string; filename: string } | null>(null)
   const { appUser } = useAuth()
   const canChangeStatus = appUser?.role === 'editor' || appUser?.role === 'admin'
   const qc = useQueryClient()
@@ -57,21 +58,40 @@ export function SOPPageHeader({ sop }: Props) {
     if (duration > 0) setTimeout(() => setToast(null), duration)
   }
 
+  // Latest cached exports (PDF / DOCX) — from metrics which is already fetched above
+  const latestPdf  = metrics?.recent_exports?.find((e: { format: string; file_url: string | null }) => e.format === 'pdf'  && e.file_url)
+  const latestDocx = metrics?.recent_exports?.find((e: { format: string; file_url: string | null }) => e.format === 'docx' && e.file_url)
+
+  function openCachedPdf() {
+    if (latestPdf?.file_url) setPdfPreview({ url: latestPdf.file_url, filename: `sop_${sop.id}.pdf` })
+  }
+
   async function handleExport(format: 'docx' | 'pdf') {
     setExporting(format)
     showToast('Generating document — this may take a minute…', 'ok', 0)
     try {
       const { download_url, filename } = await exportSOP(sop.id, format)
-      const a = document.createElement('a')
-      a.href = download_url
-      a.download = filename
-      a.click()
-      showToast('Download started!')
+      qc.invalidateQueries({ queryKey: sopKeys.metrics(sop.id) })
+      if (format === 'pdf') {
+        setPdfPreview({ url: download_url, filename })
+        setToast(null)
+      } else {
+        window.open(download_url, '_blank', 'noopener')
+        showToast('Download started!')
+      }
     } catch {
       showToast('Export failed — please try again', 'err')
     } finally {
       setExporting(null)
     }
+  }
+
+  function timeAgo(dateStr: string) {
+    const diff = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000)
+    if (diff < 60) return 'just now'
+    if (diff < 3600) return `${Math.floor(diff / 60)}m ago`
+    if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`
+    return `${Math.floor(diff / 86400)}d ago`
   }
 
   function handleShare() {
@@ -203,42 +223,74 @@ export function SOPPageHeader({ sop }: Props) {
 
         {/* Right: action buttons */}
         <div className="flex items-center gap-1.5 shrink-0">
-          <button
-            onClick={() => handleExport('docx')}
-            disabled={exporting !== null}
-            className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium border border-default rounded-md text-muted hover:bg-raised hover:border-default hover:shadow-sm disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-          >
-            {exporting === 'docx' ? (
-              <svg className="animate-spin w-3 h-3" viewBox="0 0 24 24" fill="none">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
-              </svg>
-            ) : (
-              <svg viewBox="0 0 16 16" fill="currentColor" className="w-3 h-3 text-blue-500">
-                <path d="M8 1a1 1 0 011 1v5.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 011.414-1.414L7 7.586V2a1 1 0 011-1z"/>
-                <path d="M2 11a1 1 0 011-1h10a1 1 0 110 2H3a1 1 0 01-1-1z"/>
-              </svg>
+          {/* DOCX */}
+          <div className="flex items-center rounded-md border border-default overflow-hidden">
+            <button
+              onClick={latestDocx ? () => window.open(latestDocx.file_url!, '_blank', 'noopener') : () => handleExport('docx')}
+              disabled={exporting !== null}
+              title={latestDocx ? `Last generated ${timeAgo(latestDocx.created_at)}` : 'Generate DOCX'}
+              className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-muted hover:bg-raised hover:text-default disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+            >
+              {exporting === 'docx' ? (
+                <svg className="animate-spin w-3 h-3" viewBox="0 0 24 24" fill="none">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+                </svg>
+              ) : (
+                <svg viewBox="0 0 16 16" fill="currentColor" className="w-3 h-3 text-blue-500">
+                  <path d="M8 1a1 1 0 011 1v5.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 011.414-1.414L7 7.586V2a1 1 0 011-1z"/>
+                  <path d="M2 11a1 1 0 011-1h10a1 1 0 110 2H3a1 1 0 01-1-1z"/>
+                </svg>
+              )}
+              {exporting === 'docx' ? 'Generating…' : 'DOCX'}
+            </button>
+            {latestDocx && (
+              <button
+                onClick={() => handleExport('docx')}
+                disabled={exporting !== null}
+                title="Regenerate DOCX"
+                className="flex items-center justify-center px-2.5 py-1 border-l border-default text-muted opacity-60 hover:opacity-100 hover:bg-raised hover:text-default disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+              >
+                <svg viewBox="0 0 16 16" fill="currentColor" className="w-3.5 h-3.5">
+                  <path fillRule="evenodd" d="M8 3a5 5 0 104.546 2.914.5.5 0 00-.908-.417A4 4 0 118 4v1.586l1.293-1.293a.5.5 0 01.707.707l-2 2a.5.5 0 01-.707 0l-2-2a.5.5 0 11.707-.707L7.5 5.586V4A5 5 0 008 3z" clipRule="evenodd"/>
+                </svg>
+              </button>
             )}
-            {exporting === 'docx' ? 'Generating…' : 'DOCX'}
-          </button>
+          </div>
 
-          <button
-            onClick={() => handleExport('pdf')}
-            disabled={exporting !== null}
-            className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium bg-red-500/10 border border-red-500/30 rounded-md text-red-600 hover:bg-red-500/15 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-          >
-            {exporting === 'pdf' ? (
-              <svg className="animate-spin w-3 h-3" viewBox="0 0 24 24" fill="none">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
-              </svg>
-            ) : (
-              <svg viewBox="0 0 16 16" fill="currentColor" className="w-3 h-3">
-                <path fillRule="evenodd" d="M4 2a2 2 0 00-2 2v8a2 2 0 002 2h8a2 2 0 002-2V4a2 2 0 00-2-2H4zm1 3a1 1 0 000 2h6a1 1 0 100-2H5zm0 3a1 1 0 100 2h4a1 1 0 100-2H5z" clipRule="evenodd"/>
-              </svg>
+          {/* PDF */}
+          <div className="flex items-center rounded-md bg-red-500/10 border border-red-500/30 overflow-hidden">
+            <button
+              onClick={latestPdf ? openCachedPdf : () => handleExport('pdf')}
+              disabled={exporting !== null}
+              title={latestPdf ? `Last generated ${timeAgo(latestPdf.created_at)}` : 'Generate PDF'}
+              className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-red-600 hover:bg-red-500/20 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+            >
+              {exporting === 'pdf' ? (
+                <svg className="animate-spin w-3 h-3" viewBox="0 0 24 24" fill="none">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+                </svg>
+              ) : (
+                <svg viewBox="0 0 16 16" fill="currentColor" className="w-3 h-3">
+                  <path fillRule="evenodd" d="M4 2a2 2 0 00-2 2v8a2 2 0 002 2h8a2 2 0 002-2V4a2 2 0 00-2-2H4zm1 3a1 1 0 000 2h6a1 1 0 100-2H5zm0 3a1 1 0 100 2h4a1 1 0 100-2H5z" clipRule="evenodd"/>
+                </svg>
+              )}
+              {exporting === 'pdf' ? 'Generating…' : 'PDF'}
+            </button>
+            {latestPdf && (
+              <button
+                onClick={() => handleExport('pdf')}
+                disabled={exporting !== null}
+                title="Regenerate PDF"
+                className="flex items-center justify-center px-2.5 py-1 border-l border-red-500/30 text-red-500 opacity-60 hover:opacity-100 hover:bg-red-500/20 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+              >
+                <svg viewBox="0 0 16 16" fill="currentColor" className="w-3.5 h-3.5">
+                  <path fillRule="evenodd" d="M8 3a5 5 0 104.546 2.914.5.5 0 00-.908-.417A4 4 0 118 4v1.586l1.293-1.293a.5.5 0 01.707.707l-2 2a.5.5 0 01-.707 0l-2-2a.5.5 0 11.707-.707L7.5 5.586V4A5 5 0 008 3z" clipRule="evenodd"/>
+                </svg>
+              </button>
             )}
-            {exporting === 'pdf' ? 'Generating…' : 'PDF'}
-          </button>
+          </div>
 
           <button
             onClick={handleShare}
@@ -251,6 +303,61 @@ export function SOPPageHeader({ sop }: Props) {
           </button>
         </div>
       </div>
+
+      {/* PDF Preview Modal */}
+      {pdfPreview && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setPdfPreview(null)}>
+          <div className="relative flex flex-col bg-card border border-default rounded-2xl shadow-2xl w-full max-w-4xl h-[90vh]" onClick={e => e.stopPropagation()}>
+            {/* Header */}
+            <div className="flex items-center justify-between px-4 py-3 border-b border-subtle shrink-0">
+              <div className="flex items-center gap-2">
+                <svg viewBox="0 0 16 16" fill="currentColor" className="w-4 h-4 text-red-500">
+                  <path fillRule="evenodd" d="M4 2a2 2 0 00-2 2v8a2 2 0 002 2h8a2 2 0 002-2V4a2 2 0 00-2-2H4zm1 3a1 1 0 000 2h6a1 1 0 100-2H5zm0 3a1 1 0 100 2h4a1 1 0 100-2H5z" clipRule="evenodd"/>
+                </svg>
+                <span className="text-sm font-semibold text-default truncate max-w-xs">{pdfPreview.filename}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => { setPdfPreview(null); void handleExport('pdf') }}
+                  disabled={exporting !== null}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-default rounded-lg text-muted hover:bg-raised disabled:opacity-50 transition-colors"
+                >
+                  <svg viewBox="0 0 16 16" fill="currentColor" className="w-3 h-3">
+                    <path fillRule="evenodd" d="M8 3a5 5 0 104.546 2.914.5.5 0 00-.908-.417A4 4 0 118 4v1.586l1.293-1.293a.5.5 0 01.707.707l-2 2a.5.5 0 01-.707 0l-2-2a.5.5 0 11.707-.707L7.5 5.586V4A5 5 0 008 3z" clipRule="evenodd"/>
+                  </svg>
+                  Regenerate
+                </button>
+                <a
+                  href={pdfPreview.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-red-500/10 border border-red-500/30 text-red-600 rounded-lg hover:bg-red-500/20 transition-colors"
+                >
+                  <svg viewBox="0 0 16 16" fill="currentColor" className="w-3 h-3">
+                    <path d="M8 1a1 1 0 011 1v5.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 011.414-1.414L7 7.586V2a1 1 0 011-1z"/>
+                    <path d="M2 11a1 1 0 011-1h10a1 1 0 110 2H3a1 1 0 01-1-1z"/>
+                  </svg>
+                  Download
+                </a>
+                <button
+                  onClick={() => setPdfPreview(null)}
+                  className="w-7 h-7 flex items-center justify-center rounded-lg text-muted hover:bg-raised hover:text-default transition-colors"
+                >
+                  <svg viewBox="0 0 16 16" fill="currentColor" className="w-4 h-4">
+                    <path d="M4.646 4.646a.5.5 0 01.708 0L8 7.293l2.646-2.647a.5.5 0 01.708.708L8.707 8l2.647 2.646a.5.5 0 01-.708.708L8 8.707l-2.646 2.647a.5.5 0 01-.708-.708L7.293 8 4.646 5.354a.5.5 0 010-.708z"/>
+                  </svg>
+                </button>
+              </div>
+            </div>
+            {/* iframe */}
+            <iframe
+              src={pdfPreview.url}
+              className="flex-1 w-full rounded-b-2xl"
+              title="PDF Preview"
+            />
+          </div>
+        </div>
+      )}
 
       {/* Toast */}
       {toast && (

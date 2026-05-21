@@ -281,6 +281,12 @@ class ExportHistoryItem(BaseModel):
     format: str
     file_size_bytes: Optional[int] = None
     created_at: datetime
+    file_url: Optional[str] = None
+
+    @field_validator('file_url', mode='before')
+    @classmethod
+    def _apply_sas(cls, v: Optional[str]) -> Optional[str]:
+        return _with_sas(v) or v if v else None
 
 
 class LikerItem(BaseModel):

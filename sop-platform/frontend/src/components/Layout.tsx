@@ -54,17 +54,18 @@ const THEMES: { value: Theme; label: string; Icon: () => JSX.Element }[] = [
   { value: 'gray',  label: 'Gray',  Icon: SlateIcon },
 ]
 
-function NavLink({ to, children }: { to: string; children: React.ReactNode }) {
+function NavLink({ to, icon, children }: { to: string; icon: React.ReactNode; children: React.ReactNode }) {
   const state = useRouterState()
   const active = state.location.pathname.startsWith(to)
   return (
     <Link
       to={to}
       className={clsx(
-        'relative text-sm font-medium px-1 py-0.5 transition-colors duration-150',
+        'relative flex items-center gap-1.5 text-sm font-medium px-1 py-0.5 transition-colors duration-150',
         active ? 'text-default' : 'text-muted hover:text-secondary',
       )}
     >
+      <span className={clsx('w-4 h-4', active ? 'text-violet-500' : 'text-muted')}>{icon}</span>
       {children}
       <span
         className={clsx(
@@ -258,7 +259,7 @@ export function Layout() {
     <div className="min-h-screen bg-page">
       <header className="sticky top-0 z-40 border-b border-subtle bg-card/80 backdrop-blur-md">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-14">
+          <div className="relative flex items-center justify-between h-14">
 
             {/* Logo */}
             <Link to="/dashboard" className="flex items-center gap-2.5 group">
@@ -271,15 +272,24 @@ export function Layout() {
             </Link>
 
             {isAuthenticated && appUser ? (
-              <div className="flex items-center gap-5">
-                {/* Nav links */}
-                <nav className="flex items-center gap-6">
-                  <NavLink to="/dashboard">Dashboard</NavLink>
+              <>
+                {/* Nav links — absolutely centred */}
+                <nav className="absolute left-1/2 -translate-x-1/2 flex items-center gap-6">
+                  <NavLink to="/dashboard" icon={
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>
+                    </svg>
+                  }>Dashboard</NavLink>
                   {appUser.role === 'admin' && (
-                    <NavLink to="/settings">Settings</NavLink>
+                    <NavLink to="/settings" icon={
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                        <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/>
+                      </svg>
+                    }>Settings</NavLink>
                   )}
                 </nav>
 
+                <div className="flex items-center gap-5">
                 {/* Theme toggle + bell in one pill */}
                 <div className="flex items-center bg-raised border border-subtle rounded-lg p-0.5 gap-0.5">
                   {THEMES.map(({ value, label, Icon }) => (
@@ -309,6 +319,7 @@ export function Layout() {
                   onSignOut={() => void signOut()}
                 />
               </div>
+              </>
             ) : null}
           </div>
         </div>

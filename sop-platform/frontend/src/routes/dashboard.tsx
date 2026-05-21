@@ -323,7 +323,7 @@ function Dashboard() {
           <p className="text-xs text-muted mt-0.5">
             {stats.processing > 0
               ? `${stats.processing} SOP${stats.processing > 1 ? 's' : ''} currently processing`
-              : 'All SOPs up to date'}
+              : 'Create, review, merge, and publish SOPs from one place.'}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -468,47 +468,144 @@ function Dashboard() {
         </div>
       </div>
 
-      {/* Filters row — always visible */}
+      {/* Filters row */}
       <div className="flex items-center gap-2 flex-wrap">
-        <span className="text-xs font-semibold text-muted shrink-0">Filters:</span>
-        <div className="flex flex-wrap items-center gap-1.5 flex-1 min-w-0">
-          {statusFilter && (
-            <span className={clsx(
-              'inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full border font-medium',
-              statusFilter === 'processing' ? 'bg-violet-500/15 text-violet-400 border-violet-500/25' :
-              statusFilter === 'published'  ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/25' :
-              statusFilter === 'draft'      ? 'bg-amber-500/15 text-amber-400 border-amber-500/25' :
-              'bg-blue-500/15 text-blue-400 border-blue-500/25'
-            )}>
-              <span className="w-1.5 h-1.5 rounded-full bg-current shrink-0" />
-              {statusFilter.charAt(0).toUpperCase() + statusFilter.slice(1).replace('_', ' ')}
-              <button onClick={() => toggleStatus(statusFilter)} className="opacity-60 hover:opacity-100 transition-opacity ml-0.5">×</button>
-            </span>
-          )}
+        {/* Status pills */}
+        <div className="flex items-center gap-1.5 flex-wrap flex-1 min-w-0">
+          {/* All */}
+          <button
+            onClick={() => { setStatusFilter(null); setSelectedTags([]); setPage(1) }}
+            className={clsx(
+              'inline-flex items-center gap-1.5 text-xs px-3 py-1 rounded-full border font-medium transition-all duration-150',
+              !statusFilter && selectedTags.length === 0
+                ? 'bg-blue-600 text-white border-blue-600'
+                : 'bg-card text-muted border-default hover:text-secondary hover:border-default',
+            )}
+          >
+            <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+              <path d="M5 3a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2V5a2 2 0 00-2-2H5zm0 8a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2v-2a2 2 0 00-2-2H5zm6-6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V5zm0 8a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+            </svg>
+            All
+          </button>
+
+          {/* Draft */}
+          <button
+            onClick={() => { toggleStatus('draft'); setPage(1) }}
+            className={clsx(
+              'inline-flex items-center gap-1.5 text-xs px-3 py-1 rounded-full border font-medium transition-all duration-150',
+              statusFilter === 'draft'
+                ? 'bg-amber-500/20 text-amber-400 border-amber-500/40'
+                : 'bg-card text-muted border-default hover:text-secondary hover:border-default',
+            )}
+          >
+            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <circle cx="12" cy="12" r="9" />
+            </svg>
+            Draft
+          </button>
+
+          {/* In Review */}
+          <button
+            onClick={() => { toggleStatus('in_review'); setPage(1) }}
+            className={clsx(
+              'inline-flex items-center gap-1.5 text-xs px-3 py-1 rounded-full border font-medium transition-all duration-150',
+              statusFilter === 'in_review'
+                ? 'bg-blue-500/20 text-blue-400 border-blue-500/40'
+                : 'bg-card text-muted border-default hover:text-secondary hover:border-default',
+            )}
+          >
+            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            In Review
+          </button>
+
+          {/* In Processing */}
+          <button
+            onClick={() => { toggleStatus('processing'); setPage(1) }}
+            className={clsx(
+              'inline-flex items-center gap-1.5 text-xs px-3 py-1 rounded-full border font-medium transition-all duration-150',
+              statusFilter === 'processing'
+                ? 'bg-violet-500/20 text-violet-400 border-violet-500/40'
+                : 'bg-card text-muted border-default hover:text-secondary hover:border-default',
+            )}
+          >
+            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+            </svg>
+            In Processing
+          </button>
+
+          {/* Published */}
+          <button
+            onClick={() => { toggleStatus('published'); setPage(1) }}
+            className={clsx(
+              'inline-flex items-center gap-1.5 text-xs px-3 py-1 rounded-full border font-medium transition-all duration-150',
+              statusFilter === 'published'
+                ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40'
+                : 'bg-card text-muted border-default hover:text-secondary hover:border-default',
+            )}
+          >
+            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            Published
+          </button>
+
+          {/* Archived */}
+          <button
+            onClick={() => { toggleStatus('archived'); setPage(1) }}
+            className={clsx(
+              'inline-flex items-center gap-1.5 text-xs px-3 py-1 rounded-full border font-medium transition-all duration-150',
+              statusFilter === 'archived'
+                ? 'bg-raised text-secondary border-default'
+                : 'bg-card text-muted border-default hover:text-secondary hover:border-default',
+            )}
+          >
+            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+            </svg>
+            Archived
+          </button>
+
+          {/* Tag pills */}
           {allTags.map(tag => {
             const active = selectedTags.includes(tag)
+            const color = tagColor(tag)
             return (
               <button
                 key={tag}
                 onClick={() => toggleTag(tag)}
                 className={clsx(
-                  'inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full border font-medium transition-all duration-150',
+                  'inline-flex items-center gap-1.5 text-xs px-3 py-1 rounded-full border font-medium transition-all duration-150',
                   active
-                    ? tagColor(tag) + ' ring-1 ring-offset-1 ring-current scale-[1.03]'
-                    : 'bg-raised text-muted border-default hover:text-secondary hover:border-default',
+                    ? color
+                    : 'bg-card text-muted border-default hover:text-secondary hover:border-default',
                 )}
               >
+                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                </svg>
                 {tag}
-                {active && <span className="opacity-60 hover:opacity-100 transition-opacity ml-0.5">×</span>}
               </button>
             )
           })}
+
+          {/* Clear filters */}
           {isFiltering && (
-            <button onClick={clearAll} className="text-xs text-blue-400 hover:text-blue-300 transition-colors ml-1">
-              Clear all
+            <button
+              onClick={clearAll}
+              className="inline-flex items-center gap-1.5 text-xs px-3 py-1 rounded-full border border-default bg-card text-muted hover:text-red-400 hover:border-red-400/40 hover:bg-red-500/5 font-medium transition-all duration-150"
+            >
+              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+              Clear filters
             </button>
           )}
         </div>
+
+        {/* Sort + view */}
         <div className="flex items-center gap-2 shrink-0">
           <SortDropdown value={sortBy} onChange={(k) => { setSortBy(k); setPage(1) }} />
           <div className="flex items-center bg-card border border-subtle rounded-lg overflow-hidden">
