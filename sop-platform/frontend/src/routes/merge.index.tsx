@@ -473,13 +473,13 @@ function MergePage() {
           <div className="p-5 min-h-64 space-y-4">
             <div className="flex items-center justify-between">
               <p className="text-xs text-muted">
-                Groups of recordings of the same process. Create a group, then compare and merge.
+                Groups contain recordings of the same process. Create a group, then compare and merge.
               </p>
               <button
                 onClick={() => setShowModal(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors shrink-0"
+                className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-white bg-blue-600 rounded-xl hover:bg-blue-700 transition-colors shrink-0 shadow-sm shadow-blue-500/20"
               >
-                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
                 </svg>
                 New Group
@@ -499,165 +499,181 @@ function MergePage() {
                 <p className="text-xs text-muted mt-1 max-w-xs">Click "New Group" to create one and select which recordings belong together.</p>
               </div>
             ) : (
-              <div className="space-y-3">
-                {groups.map(group => (
-                  <div key={group.project_code} className="rounded-xl border border-subtle overflow-hidden">
-                    <div className="flex items-center justify-between px-4 py-2.5 bg-page border-b border-subtle">
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <div className="min-w-0">
+              <div className="space-y-4">
+                {groups.map(group => {
+                  const sources = group.sops.filter(s => !s.is_merged)
+                  const mergedOutputs = group.sops.filter(s => s.is_merged)
+                  const isReady = sources.length === 2
+                  return (
+                    <div key={group.project_code} className="rounded-xl border border-subtle overflow-hidden bg-card">
+
+                      {/* Group header */}
+                      <div className="flex items-center gap-3 px-4 py-3">
+                        <div className="w-9 h-9 rounded-xl bg-purple-500/15 flex items-center justify-center shrink-0">
+                          <svg className="w-5 h-5 text-purple-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.971 5.971 0 00-.941-3.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-5.058 2.772m0 0a3 3 0 00-4.681 2.72 8.986 8.986 0 003.74.477m.94-3.197a5.971 5.971 0 00-.94 3.197M15 6.75a3 3 0 11-6 0 3 3 0 016 0zm6 3a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0zm-13.5 0a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z" />
+                          </svg>
+                        </div>
+                        <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
-                            <span className="text-sm font-bold text-secondary truncate">
+                            <span className="text-sm font-bold text-default truncate">
                               {group.name ?? group.project_code}
                             </span>
-                            {group.sops.filter(s => !s.is_merged).length === 2 && (
-                              <span className="text-xs text-green-600 bg-green-500/10 border border-green-500/20 px-2 py-0.5 rounded-full font-medium shrink-0">
+                            {isReady && (
+                              <span className="text-xs text-green-600 bg-green-500/10 border border-green-500/20 px-2 py-0.5 rounded-full font-semibold shrink-0">
                                 Ready
                               </span>
                             )}
                           </div>
-                          <span className="font-mono text-xs text-blue-500 mt-0.5 block">{group.project_code}</span>
+                          <span className="font-mono text-xs text-blue-500">{group.project_code}</span>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className="text-xs text-muted">{sources.length} recordings</span>
+                          {confirmDeleteCode === group.project_code ? (
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-xs text-red-600 font-medium">Delete?</span>
+                              <button onClick={() => deleteGroupMutation.mutate(group.project_code)} disabled={deleteGroupMutation.isPending} className="text-xs px-2 py-0.5 bg-red-600 text-white rounded font-semibold hover:bg-red-700 disabled:opacity-50 transition-colors">
+                                {deleteGroupMutation.isPending ? '…' : 'Yes'}
+                              </button>
+                              <button onClick={() => setConfirmDeleteCode(null)} className="text-xs px-2 py-0.5 bg-raised text-muted rounded font-semibold hover:bg-card border border-subtle transition-colors">No</button>
+                            </div>
+                          ) : (
+                            <button onClick={() => setConfirmDeleteCode(group.project_code)} className="p-1.5 text-muted hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors" title="Delete group">
+                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                            </button>
+                          )}
                         </div>
                       </div>
-                      <div className="flex items-center gap-3 shrink-0 ml-2">
-                        <span className="text-xs text-muted">{group.sops.filter(s => !s.is_merged).length} recordings</span>
-                        {confirmDeleteCode === group.project_code ? (
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-xs text-red-600 font-medium">Delete?</span>
-                            <button onClick={() => deleteGroupMutation.mutate(group.project_code)} disabled={deleteGroupMutation.isPending} className="text-xs px-2 py-0.5 bg-red-600 text-white rounded font-semibold hover:bg-red-700 disabled:opacity-50 transition-colors">
-                              {deleteGroupMutation.isPending ? '…' : 'Yes'}
-                            </button>
-                            <button onClick={() => setConfirmDeleteCode(null)} className="text-xs px-2 py-0.5 bg-raised text-muted rounded font-semibold hover:bg-card border border-subtle transition-colors">No</button>
-                          </div>
+
+                      {/* Recordings section */}
+                      <div className="border-t border-subtle">
+                        <p className="px-4 pt-2.5 pb-1 text-xs font-semibold text-muted">Recordings</p>
+                        <div className="divide-y divide-subtle">
+                          {sources.map((sop, idx) => (
+                            <div key={sop.id} className="flex items-center gap-3 px-4 py-2.5">
+                              <span className="w-6 h-6 rounded-full bg-raised border border-subtle text-muted text-xs font-bold flex items-center justify-center shrink-0">{idx + 1}</span>
+                              {renamingId === sop.id ? (
+                                <div className="flex items-center gap-2 flex-1">
+                                  <input autoFocus value={renameValue} onChange={e => setRenameValue(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') submitRename(sop.id); if (e.key === 'Escape') setRenamingId(null) }} className="flex-1 px-2 py-0.5 text-sm border border-blue-500/40 rounded bg-raised text-default focus:outline-none focus:ring-2 focus:ring-blue-500/30" />
+                                  <button onClick={() => submitRename(sop.id)} disabled={renameMutation.isPending} className="text-xs px-2 py-0.5 bg-blue-600 text-white rounded font-semibold hover:bg-blue-700 disabled:opacity-50">Save</button>
+                                  <button onClick={() => setRenamingId(null)} className="text-xs px-2 py-0.5 bg-raised text-muted rounded hover:bg-card border border-subtle">✕</button>
+                                </div>
+                              ) : (
+                                <div className="flex items-center gap-1.5 flex-1 min-w-0 group/row">
+                                  <span className="flex-1 text-sm text-secondary truncate">{sop.title}</span>
+                                  <button onClick={() => startRename(sop.id, sop.title)} className="opacity-0 group-hover/row:opacity-60 hover:!opacity-100 transition-opacity text-muted hover:text-blue-500 shrink-0">
+                                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                                  </button>
+                                </div>
+                              )}
+                              {sop.meeting_date && renamingId !== sop.id && (
+                                <span className="inline-flex items-center gap-1.5 text-xs text-muted shrink-0">
+                                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                                  {fmtDate(sop.meeting_date)}
+                                </span>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Merged Output section */}
+                      {mergedOutputs.length > 0 && (
+                        <div className="border-t border-subtle bg-purple-500/5">
+                          <p className="px-4 pt-2.5 pb-1 text-xs font-semibold text-purple-500">Merged Output</p>
+                          {mergedOutputs.map(sop => (
+                            <div key={sop.id} className="flex items-center gap-3 px-4 py-2.5">
+                              <div className="w-9 h-9 rounded-xl bg-purple-500/15 flex items-center justify-center shrink-0">
+                                <svg className="w-4 h-4 text-purple-500" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5 3a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2V5a2 2 0 00-2-2H5zm0 8a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2v-2a2 2 0 00-2-2H5zm6-6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V5zm0 8a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" clipRule="evenodd" /></svg>
+                              </div>
+                              {renamingId === sop.id ? (
+                                <div className="flex items-center gap-2 flex-1">
+                                  <input autoFocus value={renameValue} onChange={e => setRenameValue(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') submitRename(sop.id); if (e.key === 'Escape') setRenamingId(null) }} className="flex-1 px-2 py-0.5 text-sm border border-purple-500/40 rounded bg-raised text-default focus:outline-none focus:ring-2 focus:ring-purple-500/30" />
+                                  <button onClick={() => submitRename(sop.id)} disabled={renameMutation.isPending} className="text-xs px-2 py-0.5 bg-purple-600 text-white rounded font-semibold hover:bg-purple-700 disabled:opacity-50">Save</button>
+                                  <button onClick={() => setRenamingId(null)} className="text-xs px-2 py-0.5 bg-raised text-muted rounded hover:bg-card border border-subtle">✕</button>
+                                </div>
+                              ) : (
+                                <div className="flex items-center gap-1.5 flex-1 min-w-0 group/row">
+                                  <span className="flex-1 text-sm text-purple-300 font-medium truncate">{sop.title}</span>
+                                  <button onClick={() => startRename(sop.id, sop.title)} className="opacity-0 group-hover/row:opacity-60 hover:!opacity-100 transition-opacity text-purple-300 hover:text-purple-500 shrink-0">
+                                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                                  </button>
+                                </div>
+                              )}
+                              {sop.meeting_date && renamingId !== sop.id && (
+                                <span className="inline-flex items-center gap-1.5 text-xs text-purple-400/70 shrink-0">
+                                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                                  {fmtDate(sop.meeting_date)}
+                                </span>
+                              )}
+                              {renamingId !== sop.id && (
+                                <div className="shrink-0 flex items-center gap-2">
+                                  {confirmDeleteSopId === sop.id ? (
+                                    <>
+                                      <span className="text-xs text-muted">Delete?</span>
+                                      <button onClick={() => deleteSopMutation.mutate(sop.id)} disabled={deleteSopMutation.isPending} className="text-xs px-2 py-0.5 bg-red-600 text-white font-semibold rounded hover:bg-red-700 disabled:opacity-50">Yes</button>
+                                      <button onClick={() => setConfirmDeleteSopId(null)} className="text-xs px-2 py-0.5 bg-raised text-muted rounded hover:bg-card border border-subtle">No</button>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <button onClick={() => setConfirmDeleteSopId(sop.id)} className="p-1 text-muted hover:text-red-500 transition-colors" title="Delete">
+                                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                      </button>
+                                      <Link to="/sop/$id/procedure" params={{ id: sop.id }} className="text-xs font-semibold text-purple-400 hover:text-purple-300 transition-colors">
+                                        Open
+                                      </Link>
+                                    </>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Compare / re-compare button */}
+                      <div className="px-4 py-3 border-t border-subtle flex justify-center">
+                        {sources.length === 2 ? (
+                          <>
+                            {mergedOutputs.length === 0 && (
+                              <button
+                                onClick={() => compareMutation.mutate({ base: sources[0].id, updated: sources[1].id, code: group.project_code })}
+                                disabled={compareMutation.isPending}
+                                className="flex items-center gap-2 px-6 py-2 bg-purple-600 text-white text-sm font-semibold rounded-xl hover:bg-purple-700 disabled:opacity-50 transition-colors shadow-sm shadow-purple-500/20"
+                              >
+                                {comparingCode === group.project_code ? (
+                                  <><svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>Analysing…</>
+                                ) : 'Compare & Merge'}
+                              </button>
+                            )}
+                            {mergedOutputs.length > 0 && (
+                              <button
+                                onClick={() => compareMutation.mutate({ base: sources[0].id, updated: sources[1].id, code: group.project_code })}
+                                disabled={compareMutation.isPending}
+                                className="flex items-center gap-2 px-6 py-2 text-sm font-semibold text-secondary border border-default rounded-xl hover:border-purple-500/40 hover:text-purple-400 hover:bg-purple-500/5 disabled:opacity-50 transition-all"
+                              >
+                                {comparingCode === group.project_code ? (
+                                  <><svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>Analysing…</>
+                                ) : (
+                                  <>
+                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                                    Run a new comparison
+                                  </>
+                                )}
+                              </button>
+                            )}
+                          </>
                         ) : (
-                          <button onClick={() => setConfirmDeleteCode(group.project_code)} className="text-gray-300 hover:text-red-500 transition-colors" title="Delete group">
-                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                            </svg>
-                          </button>
+                          <p className="text-xs text-amber-600 text-center py-1">
+                            {sources.length} recordings — select any 2 from their Overview tab to initiate a pairwise merge.
+                          </p>
                         )}
                       </div>
                     </div>
-                    {(() => {
-                      const sources = group.sops.filter(s => !s.is_merged)
-                      const mergedOutputs = group.sops.filter(s => s.is_merged)
-                      return (
-                        <>
-                          <div className="divide-y divide-subtle">
-                            {sources.map((sop, idx) => (
-                              <div key={sop.id} className="flex items-center gap-3 px-4 py-2.5">
-                                <span className="w-5 h-5 rounded-full bg-raised text-muted text-xs font-bold flex items-center justify-center shrink-0">{idx + 1}</span>
-                                {renamingId === sop.id ? (
-                                  <div className="flex items-center gap-2 flex-1">
-                                    <input autoFocus value={renameValue} onChange={e => setRenameValue(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') submitRename(sop.id); if (e.key === 'Escape') setRenamingId(null) }} className="flex-1 px-2 py-0.5 text-sm border border-blue-500/40 rounded bg-raised text-default focus:outline-none focus:ring-2 focus:ring-blue-500/30" />
-                                    <button onClick={() => submitRename(sop.id)} disabled={renameMutation.isPending} className="text-xs px-2 py-0.5 bg-blue-600 text-white rounded font-semibold hover:bg-blue-700 disabled:opacity-50">Save</button>
-                                    <button onClick={() => setRenamingId(null)} className="text-xs px-2 py-0.5 bg-raised text-muted rounded hover:bg-card border border-subtle">✕</button>
-                                  </div>
-                                ) : (
-                                  <div className="flex items-center gap-1.5 flex-1 min-w-0 group/row">
-                                    <span className="flex-1 text-sm text-secondary truncate">{sop.title}</span>
-                                    <button onClick={() => startRename(sop.id, sop.title)} className="opacity-0 group-hover/row:opacity-60 hover:!opacity-100 transition-opacity text-muted hover:text-blue-500 shrink-0">
-                                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
-                                    </button>
-                                  </div>
-                                )}
-                                {sop.meeting_date && renamingId !== sop.id && (
-                                  <span className="inline-flex items-center gap-1 text-xs text-muted shrink-0">
-                                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-                                    {fmtDate(sop.meeting_date)}
-                                  </span>
-                                )}
-                              </div>
-                            ))}
-                          </div>
-
-                          {mergedOutputs.length > 0 && (
-                            <div className="border-t border-subtle bg-purple-500/5">
-                              <p className="px-4 pt-2.5 pb-1 text-xs font-semibold text-purple-500 uppercase tracking-wide">Merged Output</p>
-                              {mergedOutputs.map(sop => (
-                                <div key={sop.id} className="flex items-center gap-3 px-4 py-2 pb-2.5">
-                                  <div className="w-5 h-5 rounded-full bg-purple-500/10 flex items-center justify-center shrink-0">
-                                    <svg className="w-3 h-3 text-purple-500" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5 3a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2V5a2 2 0 00-2-2H5zm0 8a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2v-2a2 2 0 00-2-2H5zm6-6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V5zm0 8a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" clipRule="evenodd" /></svg>
-                                  </div>
-                                  {renamingId === sop.id ? (
-                                    <div className="flex items-center gap-2 flex-1">
-                                      <input autoFocus value={renameValue} onChange={e => setRenameValue(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') submitRename(sop.id); if (e.key === 'Escape') setRenamingId(null) }} className="flex-1 px-2 py-0.5 text-sm border border-purple-500/40 rounded bg-raised text-default focus:outline-none focus:ring-2 focus:ring-purple-500/30" />
-                                      <button onClick={() => submitRename(sop.id)} disabled={renameMutation.isPending} className="text-xs px-2 py-0.5 bg-purple-600 text-white rounded font-semibold hover:bg-purple-700 disabled:opacity-50">Save</button>
-                                      <button onClick={() => setRenamingId(null)} className="text-xs px-2 py-0.5 bg-raised text-muted rounded hover:bg-card border border-subtle">✕</button>
-                                    </div>
-                                  ) : (
-                                    <div className="flex items-center gap-1.5 flex-1 min-w-0 group/row">
-                                      <span className="flex-1 text-sm text-purple-400 font-medium truncate">{sop.title}</span>
-                                      <button onClick={() => startRename(sop.id, sop.title)} className="opacity-0 group-hover/row:opacity-60 hover:!opacity-100 transition-opacity text-purple-300 hover:text-purple-500 shrink-0">
-                                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
-                                      </button>
-                                    </div>
-                                  )}
-                                  {sop.meeting_date && renamingId !== sop.id && (
-                                    <span className="inline-flex items-center gap-1 text-xs text-purple-400/70 shrink-0">
-                                      <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-                                      {fmtDate(sop.meeting_date)}
-                                    </span>
-                                  )}
-                                  {renamingId !== sop.id && (
-                                    <div className="shrink-0 flex items-center gap-1.5">
-                                      {confirmDeleteSopId === sop.id ? (
-                                        <>
-                                          <span className="text-xs text-muted">Delete?</span>
-                                          <button onClick={() => deleteSopMutation.mutate(sop.id)} disabled={deleteSopMutation.isPending} className="text-xs px-2 py-0.5 bg-red-600 text-white font-semibold rounded hover:bg-red-700 disabled:opacity-50">Yes</button>
-                                          <button onClick={() => setConfirmDeleteSopId(null)} className="text-xs px-2 py-0.5 bg-raised text-muted rounded hover:bg-card border border-subtle">No</button>
-                                        </>
-                                      ) : (
-                                        <>
-                                          <button onClick={() => setConfirmDeleteSopId(sop.id)} className="p-1 text-purple-300 hover:text-red-500 transition-colors" title="Delete">
-                                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                                          </button>
-                                          <Link to="/sop/$id/procedure" params={{ id: sop.id }} className="text-xs font-semibold text-purple-500 hover:text-purple-400 underline underline-offset-2">
-                                            Open
-                                          </Link>
-                                        </>
-                                      )}
-                                    </div>
-                                  )}
-                                </div>
-                              ))}
-                            </div>
-                          )}
-
-                          <div className="px-4 py-3 bg-page border-t border-subtle space-y-2">
-                            {sources.length === 2 ? (
-                              <>
-                                {mergedOutputs.length === 0 && (
-                                  <button
-                                    onClick={() => compareMutation.mutate({ base: sources[0].id, updated: sources[1].id, code: group.project_code })}
-                                    disabled={compareMutation.isPending}
-                                    className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-purple-600 text-white text-sm font-semibold rounded-xl hover:bg-purple-700 disabled:opacity-50 transition-colors"
-                                  >
-                                    {comparingCode === group.project_code ? (
-                                      <><svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>Analysing…</>
-                                    ) : 'Compare & Merge'}
-                                  </button>
-                                )}
-                                {mergedOutputs.length > 0 && (
-                                  <button
-                                    onClick={() => compareMutation.mutate({ base: sources[0].id, updated: sources[1].id, code: group.project_code })}
-                                    disabled={compareMutation.isPending}
-                                    className="w-full text-xs text-muted hover:text-purple-500 py-1 transition-colors disabled:opacity-50"
-                                  >
-                                    {comparingCode === group.project_code ? 'Analysing…' : '↺ Run a new comparison'}
-                                  </button>
-                                )}
-                              </>
-                            ) : (
-                              <p className="text-xs text-amber-600 text-center py-1">
-                                {sources.length} recordings — select any 2 from their Overview tab to initiate a pairwise merge.
-                              </p>
-                            )}
-                          </div>
-                        </>
-                      )
-                    })()}
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             )}
 
