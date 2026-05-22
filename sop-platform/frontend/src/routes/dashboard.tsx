@@ -136,6 +136,7 @@ function SortDropdown({ value, onChange }: { value: SortKey; onChange: (k: SortK
 
 // ── List row ─────────────────────────────────────────────────
 const statusBadge: Record<SOPStatus, { label: string; cls: string; dot: string }> = {
+  uploaded:   { label: 'Ready to Process', cls: 'bg-indigo-500/12 text-indigo-600 border-indigo-500/25', dot: 'bg-indigo-400' },
   processing: { label: 'In Processing', cls: 'bg-violet-500/15 text-violet-600 border-violet-500/30', dot: 'bg-violet-500 animate-pulse' },
   draft:      { label: 'Draft',         cls: 'bg-amber-500/15 text-amber-600 border-amber-500/30',    dot: 'bg-amber-500' },
   in_review:  { label: 'In Review',     cls: 'bg-blue-500/15 text-blue-600 border-blue-500/30',       dot: 'bg-blue-500' },
@@ -144,6 +145,7 @@ const statusBadge: Record<SOPStatus, { label: string; cls: string; dot: string }
 }
 
 const avatarGradient: Record<SOPStatus, string> = {
+  uploaded:   'from-indigo-400 to-violet-500',
   processing: 'from-violet-500 to-indigo-500',
   draft:      'from-slate-400 to-slate-500',
   in_review:  'from-blue-500 to-cyan-500',
@@ -192,9 +194,7 @@ function SOPListRow({ sop, style }: { sop: SOPListItem; style?: React.CSSPropert
         </svg>
         {sop.step_count}
       </div>
-      {sop.meeting_date && (
-        <span className="hidden lg:block text-xs text-muted shrink-0">{formatDate(sop.meeting_date)}</span>
-      )}
+      <span className="hidden lg:block text-xs text-muted shrink-0">{formatDate(sop.meeting_date ?? sop.created_at)}</span>
       <button
         onClick={e => { e.stopPropagation(); navigate({ to: '/sop/$id/procedure', params: { id: sop.id } }) }}
         className="text-xs px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-500 active:scale-95 transition-all font-medium shrink-0 opacity-0 group-hover:opacity-100"
@@ -290,12 +290,13 @@ function Dashboard() {
     return matchesText && matchesTags && matchesStatus
   })
 
-  // Sort
+  // Sort — fall back to created_at when meeting_date is null
+  const sortDate = (s: (typeof filtered)[0]) => new Date(s.meeting_date ?? s.created_at).getTime()
   const sorted = [...filtered].sort((a, b) => {
     if (sortBy === 'az')     return (a.process_name || a.title).localeCompare(b.process_name || b.title)
     if (sortBy === 'steps')  return (b.step_count ?? 0) - (a.step_count ?? 0)
-    if (sortBy === 'oldest') return new Date(a.meeting_date ?? 0).getTime() - new Date(b.meeting_date ?? 0).getTime()
-    return new Date(b.meeting_date ?? 0).getTime() - new Date(a.meeting_date ?? 0).getTime()
+    if (sortBy === 'oldest') return sortDate(a) - sortDate(b)
+    return sortDate(b) - sortDate(a)
   })
 
   const totalPages   = Math.ceil(sorted.length / PAGE_SIZE)

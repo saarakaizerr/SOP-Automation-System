@@ -3,7 +3,7 @@ import { useNavigate } from '@tanstack/react-router'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import clsx from 'clsx'
 import type { SOPListItem, SOPStatus, SOPTag } from '../api/types'
-import { deleteSOP, updateSOPTags, sopKeys } from '../api/client'
+import { deleteSOP, updateSOPTags, startPipeline, sopKeys } from '../api/client'
 import { useAuthContext } from '../contexts/AuthContext'
 
 interface Props { sop: SOPListItem }
@@ -42,6 +42,16 @@ const statusConfig: Record<SOPStatus, {
   hoverBorder: string
   progressBar: string
 }> = {
+  uploaded: {
+    label: 'Ready to Process',
+    heroBg: 'from-indigo-500/10 to-violet-500/5',
+    borderLeft: 'border-l-indigo-400',
+    badge: 'bg-indigo-500/12 text-indigo-600 border-indigo-500/25',
+    dot: 'bg-indigo-400',
+    hoverShadow: 'hover:shadow-indigo-500/15',
+    hoverBorder: 'hover:border-indigo-500/40',
+    progressBar: 'from-indigo-400 to-violet-400',
+  },
   processing: {
     label: 'In Processing',
     heroBg: 'from-violet-500/12 to-indigo-500/6',
@@ -119,8 +129,8 @@ const STAGE_WORKFLOW: Record<string, number> = {
   detecting_screenshare:  2, // WF2 — frame extraction
   extracting_frames:      2,
   deduplicating:          2,
-  classifying_frames:     3, // WF3c — annotation
-  generating_annotations: 3,
+  classifying_frames:     2, // WF2 sets this at end; WF3c picks up from here
+  generating_annotations: 3, // WF3c — annotation
   extracting_clips:       4, // WF4 — clips
   generating_sections:    5, // WF5b — SOP content
 }
@@ -131,8 +141,8 @@ const STAGE_LABELS: Record<string, string> = {
   detecting_screenshare:  'Analysing screen recording',
   extracting_frames:      'Capturing screenshots',
   deduplicating:          'Capturing & filtering screenshots',
-  classifying_frames:     'Generating callouts',
-  generating_annotations: 'Creating video clips',
+  classifying_frames:     'Filtering screenshots',
+  generating_annotations: 'Generating callouts',
   extracting_clips:       'Creating video clips',
   generating_sections:    'Writing SOP content',
 }
@@ -184,6 +194,7 @@ export function SOPCard({ sop }: Props) {
   const isPipelineRunning = sop.pipeline_status
     && sop.pipeline_status !== 'completed'
     && sop.pipeline_status !== 'failed'
+    && sop.pipeline_status !== 'awaiting_approval'
 
   const pipelineIdx = PIPELINE_STAGES.indexOf(sop.pipeline_status ?? '')
   const pipelinePct = pipelineIdx < 0 ? 5 : Math.round(((pipelineIdx + 1) / PIPELINE_STAGES.length) * 100)
@@ -238,6 +249,10 @@ export function SOPCard({ sop }: Props) {
   })
   const tagMutation = useMutation({
     mutationFn: (newTags: SOPTag[]) => updateSOPTags(sop.id, newTags),
+    onSuccess: () => qc.invalidateQueries({ queryKey: sopKeys.all }),
+  })
+  const startMutation = useMutation({
+    mutationFn: () => startPipeline(sop.id),
     onSuccess: () => qc.invalidateQueries({ queryKey: sopKeys.all }),
   })
 
@@ -479,6 +494,28 @@ export function SOPCard({ sop }: Props) {
 
       {/* ── Footer — shrink-0 + border-t ensures consistent alignment across rows ── */}
       <div className="shrink-0 px-5 pb-4 pt-3 border-t border-subtle" onClick={e => e.stopPropagation()}>
+        {sop.status === 'uploaded' && canEdit && (
+          <div className="mb-3">
+            <button
+              onClick={e => { e.stopPropagation(); startMutation.mutate() }}
+              disabled={startMutation.isPending}
+              className="w-full flex items-center justify-center gap-2 text-xs font-semibold px-3 py-2 bg-violet-600 text-white rounded-lg hover:bg-violet-500 active:scale-95 transition-all disabled:opacity-60"
+            >
+              {startMutation.isPending ? (
+                <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                </svg>
+              ) : (
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 3l14 9-14 9V3z" />
+                </svg>
+              )}
+              {startMutation.isPending ? 'Starting pipeline…' : 'Start Processing'}
+            </button>
+          </div>
+        )}
+
         {sop.pipeline_status === 'failed' && (
           <div className="mb-3 flex items-center gap-2 text-xs text-red-500 font-medium bg-red-500/5 border border-red-500/20 rounded-lg px-3 py-2">
             <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -498,14 +535,12 @@ export function SOPCard({ sop }: Props) {
                   </svg>
                   {sop.step_count} {sop.step_count === 1 ? 'step' : 'steps'}
                 </span>
-                {sop.meeting_date && (
-                  <span className="flex items-center gap-1">
-                    <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                    </svg>
-                    {formatDate(sop.meeting_date)}
-                  </span>
-                )}
+                <span className="flex items-center gap-1">
+                  <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                  {formatDate(sop.meeting_date ?? sop.created_at)}
+                </span>
               </div>
               <div className="flex items-center gap-1.5 shrink-0">
                 <button

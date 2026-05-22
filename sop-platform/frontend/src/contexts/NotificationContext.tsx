@@ -9,14 +9,16 @@ export interface AppNotification {
   body: string
   timestamp: Date
   read: boolean
+  sop_id?: string
 }
 
 interface NotificationContextValue {
   notifications: AppNotification[]
   unreadCount: number
-  addNotification: (type: NotifType, title: string, body: string) => void
+  addNotification: (type: NotifType, title: string, body: string, sop_id?: string) => void
   markAllRead: () => void
   clearAll: () => void
+  dismissOne: (id: string) => void
 }
 
 const NotificationContext = createContext<NotificationContextValue | null>(null)
@@ -70,7 +72,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     return () => clearInterval(interval)
   }, [purgeOld])
 
-  const addNotification = useCallback((type: NotifType, title: string, body: string) => {
+  const addNotification = useCallback((type: NotifType, title: string, body: string, sop_id?: string) => {
     const cutoff = Date.now() - 24 * 60 * 60 * 1000
     const notif: AppNotification = {
       id: `${Date.now()}-${Math.random()}`,
@@ -79,6 +81,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       body,
       timestamp: new Date(),
       read: false,
+      ...(sop_id ? { sop_id } : {}),
     }
     setNotifications(prev => [notif, ...prev].filter(n => n.timestamp.getTime() > cutoff).slice(0, 50))
     playDing()
@@ -90,10 +93,14 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
 
   const clearAll = useCallback(() => setNotifications([]), [])
 
+  const dismissOne = useCallback((id: string) => {
+    setNotifications(prev => prev.filter(n => n.id !== id))
+  }, [])
+
   const unreadCount = notifications.filter(n => !n.read).length
 
   return (
-    <NotificationContext.Provider value={{ notifications, unreadCount, addNotification, markAllRead, clearAll }}>
+    <NotificationContext.Provider value={{ notifications, unreadCount, addNotification, markAllRead, clearAll, dismissOne }}>
       {children}
     </NotificationContext.Provider>
   )

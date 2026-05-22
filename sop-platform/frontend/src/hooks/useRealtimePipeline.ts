@@ -26,6 +26,7 @@ export function useRealtimePipeline(sops: SOPListItem[]) {
         { event: 'INSERT', schema: 'public', table: 'pipeline_runs' },
         async (payload: { new: Record<string, unknown> }) => {
           const sopId = String(payload.new.sop_id)
+          const status = String(payload.new.status)
           const sop = sopsRef.current.find(s => s.id === sopId)
           let title = sop?.process_name || sop?.title
           if (!title) {
@@ -35,8 +36,14 @@ export function useRealtimePipeline(sops: SOPListItem[]) {
             } catch {}
           }
           const label = title || 'New recording'
-          toast.info('Processing started', { description: label, duration: 6000 })
-          addNotification('upload', label, 'Processing started')
+
+          if (status === 'awaiting_approval') {
+            toast.info('New video ready to initialize', { description: label, duration: 8000 })
+            addNotification('upload', label, 'Ready to initialize', sopId)
+          } else {
+            toast.info('Processing started', { description: label, duration: 6000 })
+            addNotification('upload', label, 'Processing started', sopId)
+          }
           qc.invalidateQueries({ queryKey: sopKeys.all })
         }
       )
@@ -59,13 +66,13 @@ export function useRealtimePipeline(sops: SOPListItem[]) {
 
           if (newStatus === 'completed') {
             toast.success('SOP ready for review', { description: title, duration: 8000 })
-            addNotification('complete', title, 'SOP ready for review')
+            addNotification('complete', title, 'SOP ready for review', sopId)
           } else if (newStatus === 'failed') {
             if (appUser?.role === 'admin' || appUser?.role === 'editor') {
               const errMsg = payload.new.error_message
               const desc = `${title}${errMsg ? ` — ${errMsg}` : ' — check n8n logs'}`
               toast.error('Processing failed', { description: desc, duration: Infinity })
-              addNotification('error', title, `Processing failed${errMsg ? ` — ${errMsg}` : ' — check n8n logs'}`)
+              addNotification('error', title, `Processing failed${errMsg ? ` — ${errMsg}` : ' — check n8n logs'}`, sopId)
             }
           }
           qc.invalidateQueries({ queryKey: sopKeys.all })

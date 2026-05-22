@@ -4,6 +4,9 @@ import clsx from 'clsx'
 import { useAuthContext } from '../contexts/AuthContext'
 import { useTheme, type Theme } from '../contexts/ThemeContext'
 import { useNotifications, type AppNotification } from '../contexts/NotificationContext'
+import { startPipeline, sopKeys } from '../api/client'
+import { useQueryClient } from '@tanstack/react-query'
+import type { SOPListItem } from '../api/types'
 
 const ROLE_CONFIG: Record<'viewer' | 'editor' | 'admin', { label: string; classes: string; dot: string }> = {
   viewer: { label: 'Viewer', classes: 'bg-raised text-muted',              dot: 'bg-slate-400' },
@@ -114,8 +117,11 @@ const NOTIF_PAGE_SIZE = 3
 function NotificationBell() {
   const [open, setOpen] = useState(false)
   const [page, setPage] = useState(1)
+  const [initializing, setInitializing] = useState<string | null>(null)
+  const [initialized, setInitialized] = useState<Set<string>>(new Set())
   const ref = useRef<HTMLDivElement>(null)
-  const { notifications, unreadCount, markAllRead, clearAll } = useNotifications()
+  const { notifications, unreadCount, markAllRead, clearAll, dismissOne } = useNotifications()
+  const qc = useQueryClient()
 
   const totalPages = Math.max(1, Math.ceil(notifications.length / NOTIF_PAGE_SIZE))
   const paginated = notifications.slice((page - 1) * NOTIF_PAGE_SIZE, page * NOTIF_PAGE_SIZE)
@@ -188,22 +194,78 @@ function NotificationBell() {
                   <div
                     key={n.id}
                     className={clsx(
-                      'relative flex items-start gap-3 px-4 py-3.5 border-b border-subtle/50 last:border-0 hover:bg-raised/40 transition-colors',
+                      'group relative flex items-start gap-3 px-4 py-3.5 border-b border-subtle/50 last:border-0 hover:bg-raised/40 transition-colors',
                       !n.read && 'bg-violet-500/[0.04]',
                     )}
                   >
                     {!n.read && <div className="absolute left-0 inset-y-0 w-[3px] bg-violet-500 rounded-r-sm" />}
+                    <button
+                      onClick={(e) => { e.stopPropagation(); dismissOne(n.id) }}
+                      className="absolute top-2 right-2 w-5 h-5 rounded-md flex items-center justify-center text-muted opacity-0 group-hover:opacity-100 hover:text-red-400 hover:bg-red-500/10 transition-all duration-150"
+                      title="Dismiss"
+                    >
+                      <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
                     <div className={clsx('w-8 h-8 rounded-full flex items-center justify-center shrink-0', cfg.bg, cfg.text)}>
                       <NotifTypeIcon type={n.type} className="w-4 h-4" />
                     </div>
-                    <div className="flex-1 min-w-0">
+                    <div className="flex-1 min-w-0 pr-4">
                       <div className="flex items-start justify-between gap-2">
                         <p className="text-xs font-medium text-default truncate flex-1 leading-snug" title={n.title}>{n.title}</p>
                         <span className="text-[10px] text-muted shrink-0 whitespace-nowrap leading-snug">{timeAgo(n.timestamp)}</span>
                       </div>
-                      <span className={clsx('inline-block text-[10px] font-medium px-1.5 py-0.5 rounded-md mt-1.5', cfg.badgeBg, cfg.text)}>
-                        {n.body}
-                      </span>
+                      <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                        <span className={clsx('inline-block text-[10px] font-medium px-1.5 py-0.5 rounded-md', cfg.badgeBg, cfg.text)}>
+                          {(() => {
+                            if (n.body === 'Ready to initialize' && n.sop_id) {
+                              const sopList = qc.getQueryData<SOPListItem[]>(sopKeys.all) ?? []
+                              const sop = sopList.find(s => s.id === n.sop_id)
+                              if (initialized.has(n.id) || (sop && sop.status !== 'uploaded')) return 'Processing started'
+                            }
+                            return n.body
+                          })()}
+                        </span>
+                        {n.body === 'Ready to initialize' && n.sop_id && !initialized.has(n.id) && (() => {
+                          const sopList = qc.getQueryData<SOPListItem[]>(sopKeys.all) ?? []
+                          const sop = sopList.find(s => s.id === n.sop_id)
+                          return !sop || sop.status === 'uploaded'
+                        })() && (
+                          <button
+                            onClick={async (e) => {
+                              e.stopPropagation()
+                              setInitializing(n.id)
+                              try {
+                                await startPipeline(n.sop_id!)
+                                qc.invalidateQueries({ queryKey: sopKeys.all })
+                                setInitialized(prev => new Set(prev).add(n.id))
+                              } catch (err: unknown) {
+                                const msg = err instanceof Error ? err.message : ''
+                                if (msg.includes('409')) {
+                                  setInitialized(prev => new Set(prev).add(n.id))
+                                  qc.invalidateQueries({ queryKey: sopKeys.all })
+                                }
+                              }
+                              setInitializing(null)
+                            }}
+                            disabled={initializing === n.id}
+                            className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-md bg-violet-500 text-white hover:bg-violet-600 disabled:opacity-60 disabled:pointer-events-none transition-colors"
+                          >
+                            {initializing === n.id ? (
+                              <svg className="w-2.5 h-2.5 animate-spin" fill="none" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                              </svg>
+                            ) : (
+                              <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M5 3l14 9-14 9V3z" />
+                              </svg>
+                            )}
+                            {initializing === n.id ? 'Starting…' : 'Initialize'}
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
                 )

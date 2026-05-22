@@ -22,6 +22,7 @@ from app.database import Base
 # ── Python Enums (mirror PostgreSQL enum types) ──────────────────────────────
 
 class SOPStatus(str, enum.Enum):
+    uploaded = "uploaded"
     processing = "processing"
     draft = "draft"
     in_review = "in_review"
@@ -50,6 +51,7 @@ class CalloutMatchMethod(str, enum.Enum):
 
 
 class PipelineStatus(str, enum.Enum):
+    awaiting_approval = "awaiting_approval"
     queued = "queued"
     transcribing = "transcribing"
     detecting_screenshare = "detecting_screenshare"

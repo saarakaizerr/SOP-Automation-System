@@ -2,6 +2,7 @@ from typing import Annotated, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile
+from pydantic import BaseModel
 import httpx
 from sqlalchemy import select, func, delete, text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -10,7 +11,8 @@ from sqlalchemy.orm import selectinload
 from app.config import settings
 from app.database import get_db
 from app.dependencies.auth import require_viewer, require_editor
-from app.models import SOP, SOPStep, SOPStatus, PipelineRun, User, UserRole, SOPLike, ExportHistory, SOPActivityLog, SOPMergeSession
+from app.dependencies.pipeline_auth import require_internal_key
+from app.models import SOP, SOPStep, SOPStatus, PipelineRun, PipelineStatus, User, UserRole, SOPLike, ExportHistory, SOPActivityLog, SOPMergeSession
 from datetime import datetime, timezone
 from app.schemas import SOPListItem, SOPDetail, SOPMetrics, LikeResponse, ExportHistoryItem, ActivityEvent, ProcessMapConfigBody, LikerItem
 
@@ -606,6 +608,89 @@ async def delete_sop(
 
     # Clean up Azure Blob Storage (best-effort, after DB commit)
     await _delete_azure_prefix(str(sop_id))
+
+
+class _RegisterUploadBody(BaseModel):
+    video_url: str
+    process_name: str
+    sharepoint_file_id: str
+
+
+@router.post("/pipeline/register-upload", dependencies=[Depends(require_internal_key)])
+async def register_upload(
+    body: _RegisterUploadBody,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Called by WF-detect when a new video is found in SharePoint.
+    Creates the SOP record (status=uploaded) and a placeholder pipeline_run
+    (status=awaiting_approval) so Supabase Realtime fires a notification to the frontend.
+    The video is NOT processed until an admin/editor clicks Initialize.
+    """
+    sop = SOP(
+        title=body.process_name,
+        process_name=body.process_name,
+        video_url=body.video_url,
+        status=SOPStatus.uploaded,
+    )
+    db.add(sop)
+    await db.flush()  # get sop.id before adding the run
+
+    run = PipelineRun(sop_id=sop.id, status=PipelineStatus.awaiting_approval)
+    db.add(run)
+    await db.commit()
+
+    return {"sop_id": str(sop.id)}
+
+
+@router.post("/sops/{sop_id}/start-pipeline")
+async def start_pipeline(
+    sop_id: UUID,
+    current_user: Annotated[User, Depends(require_editor)],
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Called when an admin/editor clicks Initialize in the notification bell or SOPCard.
+    Updates SOP to processing, updates pipeline_run to queued, then fires n8n WF0 webhook.
+    Rolls back to uploaded status if the webhook call fails so the user can retry.
+    """
+    sop = (await db.execute(select(SOP).where(SOP.id == sop_id))).scalar_one_or_none()
+    if sop is None:
+        raise HTTPException(status_code=404, detail=f"SOP {sop_id} not found")
+    if sop.status != SOPStatus.uploaded:
+        raise HTTPException(status_code=409, detail=f"SOP is not in uploaded status (current: {sop.status.value})")
+
+    run = (await db.execute(
+        select(PipelineRun)
+        .where(PipelineRun.sop_id == sop_id, PipelineRun.status == PipelineStatus.awaiting_approval)
+        .order_by(PipelineRun.started_at.desc())
+        .limit(1)
+    )).scalar_one_or_none()
+
+    sop.status = SOPStatus.processing
+    if run:
+        run.status = PipelineStatus.queued
+    await db.commit()
+
+    if not settings.n8n_wf0_webhook_url:
+        return {"ok": True, "warning": "N8N_WF0_WEBHOOK_URL not configured — pipeline not triggered"}
+
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.post(
+                settings.n8n_wf0_webhook_url,
+                json={"sop_id": str(sop_id), "video_url": sop.video_url},
+            )
+            resp.raise_for_status()
+    except Exception as exc:
+        # Roll back status so the user can retry
+        sop.status = SOPStatus.uploaded
+        if run:
+            run.status = PipelineStatus.awaiting_approval
+        await db.commit()
+        raise HTTPException(status_code=502, detail=f"Failed to trigger WF0 webhook: {exc}")
+
+    return {"ok": True}
 
 
 @router.patch("/sops/{sop_id}/rename")

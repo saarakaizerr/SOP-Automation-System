@@ -21,7 +21,7 @@ export interface UserUpdateInput {
 }
 
 
-export type SOPStatus = 'processing' | 'draft' | 'in_review' | 'published' | 'archived'
+export type SOPStatus = 'uploaded' | 'processing' | 'draft' | 'in_review' | 'published' | 'archived'
 export type CalloutConfidence = 'ocr_exact' | 'ocr_fuzzy' | 'gemini_only'
 export type CalloutMatchMethod = 'ocr' | 'gemini' | 'manual'
 export type PipelineStatus = 'pending' | 'running' | 'completed' | 'failed'

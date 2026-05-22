@@ -126,6 +126,9 @@ export const toggleLike = (id: string) => mutateAPI<LikeResponse>(`/api/sops/${i
 export const deleteSOP = (id: string) => mutateAPI<null>(`/api/sops/${id}`, 'DELETE')
 export const renameSOP = (id: string, title: string) =>
   mutateAPI<{ id: string; title: string }>(`/api/sops/${id}/rename`, 'PATCH', { title })
+
+export const startPipeline = (id: string) =>
+  mutateAPI<{ ok: boolean }>(`/api/sops/${id}/start-pipeline`, 'POST')
 export const updateSOPTags = (id: string, tags: SOPTag[]) =>
   mutateAPI<SOPListItem>(`/api/sops/${id}/tags`, 'PATCH', { tags })
 
