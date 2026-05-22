@@ -77,10 +77,28 @@ function NavLink({ to, icon, children }: { to: string; icon: React.ReactNode; ch
   )
 }
 
-const NOTIF_ICON: Record<AppNotification['type'], { icon: string; bg: string; text: string }> = {
-  upload:   { icon: '📤', bg: 'bg-violet-500/10', text: 'text-violet-400' },
-  complete: { icon: '✅', bg: 'bg-emerald-500/10', text: 'text-emerald-400' },
-  error:    { icon: '❌', bg: 'bg-red-500/10',     text: 'text-red-400' },
+const NOTIF_ICON: Record<AppNotification['type'], { bg: string; text: string; badgeBg: string }> = {
+  upload:   { bg: 'bg-blue-500/15',    text: 'text-blue-400',    badgeBg: 'bg-blue-500/10' },
+  complete: { bg: 'bg-emerald-500/15', text: 'text-emerald-400', badgeBg: 'bg-emerald-500/10' },
+  error:    { bg: 'bg-red-500/15',     text: 'text-red-400',     badgeBg: 'bg-red-500/10' },
+}
+
+function NotifTypeIcon({ type, className }: { type: AppNotification['type']; className?: string }) {
+  if (type === 'upload') return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+    </svg>
+  )
+  if (type === 'complete') return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+  )
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+  )
 }
 
 function timeAgo(date: Date) {
@@ -91,10 +109,16 @@ function timeAgo(date: Date) {
   return date.toLocaleDateString()
 }
 
+const NOTIF_PAGE_SIZE = 3
+
 function NotificationBell() {
   const [open, setOpen] = useState(false)
+  const [page, setPage] = useState(1)
   const ref = useRef<HTMLDivElement>(null)
   const { notifications, unreadCount, markAllRead, clearAll } = useNotifications()
+
+  const totalPages = Math.max(1, Math.ceil(notifications.length / NOTIF_PAGE_SIZE))
+  const paginated = notifications.slice((page - 1) * NOTIF_PAGE_SIZE, page * NOTIF_PAGE_SIZE)
 
   useEffect(() => {
     function handler(e: MouseEvent) {
@@ -106,7 +130,7 @@ function NotificationBell() {
 
   function handleOpen() {
     setOpen(v => !v)
-    if (!open) markAllRead()
+    if (!open) { markAllRead(); setPage(1) }
   }
 
   return (
@@ -130,19 +154,26 @@ function NotificationBell() {
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full mt-3 w-80 z-50 bg-card border border-default rounded-2xl shadow-2xl overflow-hidden animate-fade-in-up">
+        <div className="absolute right-0 top-full mt-3 w-84 z-50 bg-card border border-default rounded-2xl shadow-2xl overflow-hidden animate-fade-in-up" style={{ width: '22rem' }}>
           {/* Header */}
           <div className="flex items-center justify-between px-4 py-3 border-b border-subtle">
-            <span className="text-sm font-semibold text-default">Notifications</span>
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-semibold text-default">Notifications</span>
+              {unreadCount > 0 && (
+                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-violet-500/15 text-violet-400">
+                  {unreadCount} new
+                </span>
+              )}
+            </div>
             {notifications.length > 0 && (
-              <button onClick={clearAll} className="text-[11px] text-muted hover:text-red-400 transition-colors">
+              <button onClick={() => { clearAll(); setPage(1) }} className="text-[11px] text-muted hover:text-red-400 transition-colors">
                 Clear all
               </button>
             )}
           </div>
 
           {/* List */}
-          <div className="max-h-80 overflow-y-auto">
+          <div>
             {notifications.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-10 text-muted gap-2">
                 <svg className="w-8 h-8 opacity-30" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -151,24 +182,66 @@ function NotificationBell() {
                 <span className="text-xs">No notifications yet</span>
               </div>
             ) : (
-              notifications.map(n => {
+              paginated.map(n => {
                 const cfg = NOTIF_ICON[n.type]
                 return (
-                  <div key={n.id} className={clsx('flex items-start gap-3 px-4 py-3 border-b border-subtle/50 last:border-0', !n.read && 'bg-violet-500/5')}>
-                    <div className={clsx('w-8 h-8 rounded-lg flex items-center justify-center shrink-0 text-sm', cfg.bg)}>
-                      {cfg.icon}
+                  <div
+                    key={n.id}
+                    className={clsx(
+                      'relative flex items-start gap-3 px-4 py-3.5 border-b border-subtle/50 last:border-0 hover:bg-raised/40 transition-colors',
+                      !n.read && 'bg-violet-500/[0.04]',
+                    )}
+                  >
+                    {!n.read && <div className="absolute left-0 inset-y-0 w-[3px] bg-violet-500 rounded-r-sm" />}
+                    <div className={clsx('w-8 h-8 rounded-full flex items-center justify-center shrink-0', cfg.bg, cfg.text)}>
+                      <NotifTypeIcon type={n.type} className="w-4 h-4" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className={clsx('text-xs font-semibold', cfg.text)}>{n.title}</p>
-                      <p className="text-xs text-muted truncate mt-0.5">{n.body}</p>
-                      <p className="text-[10px] text-muted/60 mt-1">{timeAgo(n.timestamp)}</p>
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="text-xs font-medium text-default truncate flex-1 leading-snug" title={n.title}>{n.title}</p>
+                        <span className="text-[10px] text-muted shrink-0 whitespace-nowrap leading-snug">{timeAgo(n.timestamp)}</span>
+                      </div>
+                      <span className={clsx('inline-block text-[10px] font-medium px-1.5 py-0.5 rounded-md mt-1.5', cfg.badgeBg, cfg.text)}>
+                        {n.body}
+                      </span>
                     </div>
-                    {!n.read && <span className="w-2 h-2 rounded-full bg-violet-500 shrink-0 mt-1.5" />}
                   </div>
                 )
               })
             )}
           </div>
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-center gap-3 px-4 py-2.5 border-t border-subtle">
+              <button
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+                disabled={page === 1}
+                className="w-6 h-6 rounded-md flex items-center justify-center text-muted hover:text-secondary hover:bg-raised disabled:opacity-30 disabled:pointer-events-none transition-colors"
+              >
+                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
+              </button>
+              <div className="flex items-center gap-1">
+                {Array.from({ length: totalPages }, (_, i) => (
+                  <button
+                    key={i}
+                    onClick={() => setPage(i + 1)}
+                    className={clsx(
+                      'h-1.5 rounded-full transition-all duration-200',
+                      page === i + 1 ? 'bg-violet-500 w-4' : 'bg-subtle hover:bg-muted w-1.5',
+                    )}
+                  />
+                ))}
+              </div>
+              <button
+                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                disabled={page === totalPages}
+                className="w-6 h-6 rounded-md flex items-center justify-center text-muted hover:text-secondary hover:bg-raised disabled:opacity-30 disabled:pointer-events-none transition-colors"
+              >
+                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>

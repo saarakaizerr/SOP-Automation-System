@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback } from 'react'
+import { createContext, useContext, useState, useCallback, useEffect } from 'react'
 
 export type NotifType = 'upload' | 'complete' | 'error'
 
@@ -39,10 +39,39 @@ function playDing() {
   } catch {}
 }
 
+const STORAGE_KEY = 'sop_notifications'
+
+function loadFromStorage(): AppNotification[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    if (!raw) return []
+    const parsed = JSON.parse(raw) as (Omit<AppNotification, 'timestamp'> & { timestamp: string })[]
+    return parsed.map(n => ({ ...n, timestamp: new Date(n.timestamp) }))
+  } catch {
+    return []
+  }
+}
+
 export function NotificationProvider({ children }: { children: React.ReactNode }) {
-  const [notifications, setNotifications] = useState<AppNotification[]>([])
+  const [notifications, setNotifications] = useState<AppNotification[]>(loadFromStorage)
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(notifications))
+  }, [notifications])
+
+  const purgeOld = useCallback(() => {
+    const cutoff = Date.now() - 24 * 60 * 60 * 1000
+    setNotifications(prev => prev.filter(n => n.timestamp.getTime() > cutoff))
+  }, [])
+
+  useEffect(() => {
+    purgeOld()
+    const interval = setInterval(purgeOld, 5 * 60 * 1000)
+    return () => clearInterval(interval)
+  }, [purgeOld])
 
   const addNotification = useCallback((type: NotifType, title: string, body: string) => {
+    const cutoff = Date.now() - 24 * 60 * 60 * 1000
     const notif: AppNotification = {
       id: `${Date.now()}-${Math.random()}`,
       type,
@@ -51,7 +80,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       timestamp: new Date(),
       read: false,
     }
-    setNotifications(prev => [notif, ...prev].slice(0, 50))
+    setNotifications(prev => [notif, ...prev].filter(n => n.timestamp.getTime() > cutoff).slice(0, 50))
     playDing()
   }, [])
 
