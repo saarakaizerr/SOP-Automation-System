@@ -355,7 +355,7 @@ function Dashboard() {
             <button
               onClick={() => syncMutation.mutate()}
               disabled={syncMutation.isPending || syncMutation.isSuccess}
-              title="Scan SharePoint for new KT recordings"
+              title="Check SharePoint for new KT recordings"
               className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-muted border border-subtle rounded-xl hover:bg-raised hover:text-default active:scale-95 transition-all disabled:opacity-50"
             >
               {syncMutation.isPending ? (
@@ -372,7 +372,7 @@ function Dashboard() {
                   <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
                 </svg>
               )}
-              {syncMutation.isPending ? 'Scanning…' : syncMutation.isSuccess ? 'Scanned' : 'Scan SharePoint'}
+              {syncMutation.isPending ? 'Checking…' : syncMutation.isSuccess ? 'Done' : 'Check for New Videos'}
             </button>
           )}
           {canMerge && (
