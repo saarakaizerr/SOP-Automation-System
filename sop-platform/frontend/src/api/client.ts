@@ -43,6 +43,7 @@ async function mutateAPI<T>(
 }
 
 export const fetchSOPs = () => fetchAPI<SOPListItem[]>('/api/sops')
+export const syncSharePoint = () => mutateAPI<{ ok: boolean }>('/api/pipeline/sync-sharepoint', 'POST')
 export const fetchSOP = (id: string) => fetchAPI<SOPDetail>(`/api/sops/${id}`)
 export const fetchSteps = (id: string) => fetchAPI<SOPStep[]>(`/api/sops/${id}/steps`)
 export const fetchTranscript = (id: string, speaker?: string) => {

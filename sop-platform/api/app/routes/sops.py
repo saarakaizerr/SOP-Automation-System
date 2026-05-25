@@ -616,6 +616,26 @@ class _RegisterUploadBody(BaseModel):
     sharepoint_file_id: str
 
 
+@router.post("/pipeline/sync-sharepoint")
+async def sync_sharepoint(
+    current_user: Annotated[User, Depends(require_editor)],
+) -> dict:
+    """
+    Trigger WF-detect to scan SharePoint for new video files.
+    Called by the dashboard Scan SharePoint button. Editor/Admin only.
+    Returns immediately — the scan runs asynchronously in n8n.
+    """
+    if not settings.n8n_wf_detect_webhook_url:
+        raise HTTPException(status_code=503, detail="WF-detect webhook URL not configured")
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.post(settings.n8n_wf_detect_webhook_url, json={})
+            resp.raise_for_status()
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Failed to trigger WF-detect: {exc}")
+    return {"ok": True}
+
+
 @router.post("/pipeline/register-upload", dependencies=[Depends(require_internal_key)])
 async def register_upload(
     body: _RegisterUploadBody,

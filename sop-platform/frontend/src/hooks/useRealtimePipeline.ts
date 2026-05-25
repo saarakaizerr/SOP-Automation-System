@@ -14,6 +14,7 @@ export function useRealtimePipeline(sops: SOPListItem[]) {
   const { appUser } = useAuthContext()
   const { addNotification } = useNotifications()
   const sopsRef = useRef(sops)
+  const notifiedRef = useRef<Set<string>>(new Set())
 
   useEffect(() => { sopsRef.current = sops }, [sops])
 
@@ -65,10 +66,16 @@ export function useRealtimePipeline(sops: SOPListItem[]) {
           const newStatus = payload.new.status
 
           if (newStatus === 'completed') {
-            toast.success('SOP ready for review', { description: title, duration: 8000 })
-            addNotification('complete', title, 'SOP ready for review', sopId)
+            const key = `${sopId}:completed`
+            if (!notifiedRef.current.has(key)) {
+              notifiedRef.current.add(key)
+              toast.success('SOP ready for review', { description: title, duration: 8000 })
+              addNotification('complete', title, 'SOP ready for review', sopId)
+            }
           } else if (newStatus === 'failed') {
-            if (appUser?.role === 'admin' || appUser?.role === 'editor') {
+            const key = `${sopId}:failed`
+            if (!notifiedRef.current.has(key) && (appUser?.role === 'admin' || appUser?.role === 'editor')) {
+              notifiedRef.current.add(key)
               const errMsg = payload.new.error_message
               const desc = `${title}${errMsg ? ` — ${errMsg}` : ' — check n8n logs'}`
               toast.error('Processing failed', { description: desc, duration: Infinity })

@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
-import { useQuery } from '@tanstack/react-query'
-import { fetchSOPs, sopKeys } from '../api/client'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { fetchSOPs, sopKeys, syncSharePoint } from '../api/client'
 import { SOPCard } from '../components/SOPCard'
 import { ProtectedRoute } from '../components/ProtectedRoute'
 import { useAuth } from '../hooks/useAuth'
@@ -240,12 +240,21 @@ function Dashboard() {
   const { appUser } = useAuth()
   const canMerge = appUser?.role === 'editor' || appUser?.role === 'admin'
 
+  const queryClient = useQueryClient()
   const { data: sops, isLoading, isFetching, error, refetch } = useQuery({
     queryKey: sopKeys.all,
     queryFn: fetchSOPs,
     refetchInterval: (query) => {
       const data = query.state.data as SOPListItem[] | undefined
       return data?.some(s => s.status === 'processing') ? 15000 : false
+    },
+  })
+
+  const syncMutation = useMutation({
+    mutationFn: syncSharePoint,
+    onSuccess: () => {
+      // Give WF-detect a few seconds to register new SOPs then refresh
+      setTimeout(() => queryClient.invalidateQueries({ queryKey: sopKeys.all }), 4000)
     },
   })
 
@@ -342,6 +351,30 @@ function Dashboard() {
             </svg>
             Refresh
           </button>
+          {canMerge && (
+            <button
+              onClick={() => syncMutation.mutate()}
+              disabled={syncMutation.isPending || syncMutation.isSuccess}
+              title="Scan SharePoint for new KT recordings"
+              className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-muted border border-subtle rounded-xl hover:bg-raised hover:text-default active:scale-95 transition-all disabled:opacity-50"
+            >
+              {syncMutation.isPending ? (
+                <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                </svg>
+              ) : syncMutation.isSuccess ? (
+                <svg className="w-4 h-4 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"/>
+                </svg>
+              ) : (
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
+                </svg>
+              )}
+              {syncMutation.isPending ? 'Scanning…' : syncMutation.isSuccess ? 'Scanned' : 'Scan SharePoint'}
+            </button>
+          )}
           {canMerge && (
             <>
               <a

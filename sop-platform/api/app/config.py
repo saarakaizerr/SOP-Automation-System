@@ -26,6 +26,7 @@ class Settings(BaseSettings):
     extractor_url: str = "http://sop-extractor:8001"  # override with EXTRACTOR_URL env var on Azure: http://sop-extractor
     n8n_webhook_base_url: str = ""
     n8n_wf0_webhook_url: str = ""  # full URL to WF0 webhook trigger, e.g. https://n8n.../webhook/wf0-trigger
+    n8n_wf_detect_webhook_url: str = ""  # full URL to WF-detect webhook trigger
     # Supabase auth — URL used to derive JWKS endpoint
     supabase_url: str = ""
     supabase_jwt_secret: str = ""
