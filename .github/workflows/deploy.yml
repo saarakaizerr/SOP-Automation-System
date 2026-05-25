@@ -125,7 +125,7 @@ jobs:
               'AZURE_BLOB_BASE_URL=https://cnavinfsop.blob.core.windows.net/infsop' \
               'N8N_WEBHOOK_BASE_URL=https://azuren8n.cloudnavision.com' \
               'EXTRACTOR_URL=https://sop-extractor.internal.whitemeadow-cfe4a842.southeastasia.azurecontainerapps.io' \
-              N8N_WF_DETECT_WEBHOOK_URL=secretref:n8n-wf-detect-webhook-url
+              "N8N_WF_DETECT_WEBHOOK_URL=${{ secrets.N8N_WF_DETECT_WEBHOOK_URL }}"
 
       - name: Deploy sop-extractor
         run: |
