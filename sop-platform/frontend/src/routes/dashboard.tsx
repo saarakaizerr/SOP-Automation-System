@@ -5,7 +5,6 @@ import { fetchSOPs, sopKeys, syncSharePoint } from '../api/client'
 import { SOPCard } from '../components/SOPCard'
 import { ProtectedRoute } from '../components/ProtectedRoute'
 import { useAuth } from '../hooks/useAuth'
-import { useRealtimePipeline } from '../hooks/useRealtimePipeline'
 import { PageLoader, PageError } from '../components/PageLoader'
 import type { SOPListItem, SOPStatus } from '../api/types'
 import clsx from 'clsx'
@@ -257,8 +256,6 @@ function Dashboard() {
       setTimeout(() => queryClient.invalidateQueries({ queryKey: sopKeys.all }), 4000)
     },
   })
-
-  useRealtimePipeline(sops ?? [])
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {

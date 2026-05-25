@@ -7,6 +7,7 @@ import { useNotifications, type AppNotification } from '../contexts/Notification
 import { startPipeline, sopKeys } from '../api/client'
 import { useQueryClient } from '@tanstack/react-query'
 import type { SOPListItem } from '../api/types'
+import { useRealtimePipeline } from '../hooks/useRealtimePipeline'
 
 const ROLE_CONFIG: Record<'viewer' | 'editor' | 'admin', { label: string; classes: string; dot: string }> = {
   viewer: { label: 'Viewer', classes: 'bg-raised text-muted',              dot: 'bg-slate-400' },
@@ -389,6 +390,7 @@ function UserMenu({ name, email, role, onSignOut }: { name: string; email?: stri
 export function Layout() {
   const { isAuthenticated, appUser, signOut } = useAuthContext()
   const { theme, setTheme } = useTheme()
+  useRealtimePipeline()
 
   return (
     <div className="min-h-screen bg-page">
