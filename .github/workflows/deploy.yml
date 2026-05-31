@@ -126,7 +126,8 @@ jobs:
               "N8N_WEBHOOK_BASE_URL=${{ secrets.N8N_WEBHOOK_BASE_URL }}" \
               'EXTRACTOR_URL=https://sop-extractor.internal.whitemeadow-cfe4a842.southeastasia.azurecontainerapps.io' \
               "N8N_WF_DETECT_WEBHOOK_URL=${{ secrets.N8N_WF_DETECT_WEBHOOK_URL }}" \
-              "N8N_WF0_WEBHOOK_URL=${{ secrets.N8N_WF0_WEBHOOK_URL }}"
+              "N8N_WF0_WEBHOOK_URL=${{ secrets.N8N_WF0_WEBHOOK_URL }}" \
+              "AZURE_BLOB_SAS_TOKEN=${{ secrets.AZURE_BLOB_SAS_TOKEN }}"
 
       - name: Deploy sop-extractor
         run: |
