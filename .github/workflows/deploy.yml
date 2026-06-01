@@ -135,7 +135,8 @@ jobs:
             --name sop-extractor \
             --resource-group ${{ env.RESOURCE_GROUP }} \
             --container-name sop-extractor \
-            --image ${{ env.ACR_LOGIN_SERVER }}/sop-extractor:${{ needs.build-push.outputs.image-tag }}
+            --image ${{ env.ACR_LOGIN_SERVER }}/sop-extractor:${{ needs.build-push.outputs.image-tag }} \
+            --cpu 2 --memory 8Gi
 
       - name: Verify sop-api revision is healthy
         run: |
