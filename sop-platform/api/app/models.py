@@ -61,6 +61,7 @@ class PipelineStatus(str, enum.Enum):
     generating_annotations = "generating_annotations"
     extracting_clips = "extracting_clips"
     generating_sections = "generating_sections"
+    processing_sections = "processing_sections"
     completed = "completed"
     failed = "failed"
 
