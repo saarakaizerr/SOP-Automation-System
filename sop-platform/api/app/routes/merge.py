@@ -104,8 +104,10 @@ async def create_process_group(
     if len(body.sop_ids) < 2:
         raise HTTPException(status_code=400, detail="At least 2 SOPs required")
 
-    count_result = await db.execute(select(func.count(ProcessGroup.id)))
-    next_num = (count_result.scalar() or 0) + 1
+    existing = {r[0] for r in (await db.execute(select(ProcessGroup.code))).all()}
+    next_num = 1
+    while f"GRP-{next_num:03d}" in existing:
+        next_num += 1
     code = f"GRP-{next_num:03d}"
 
     group = ProcessGroup(name=body.name, code=code, created_by=current_user.id)
