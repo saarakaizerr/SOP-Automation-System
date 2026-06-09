@@ -341,19 +341,31 @@ def _build_context(tpl: DocxTemplate, sop_data: dict, tmp_dir: Path, table_regis
         if ann_url:
             screenshot = _download_inline_image(tpl, ann_url, tmp_dir, step.get("id", "unknown"))
 
+        sub_steps = [_sanitize_text(str(s)) for s in (step.get("sub_steps") or []) if s is not None]
+        description = _sanitize_text(step.get("description") or "")
+        seq = step.get("sequence", "")
+        callouts = sorted(step.get("callouts") or [], key=lambda c: c.get("callout_number") or 0)
+
+        # Append "(Screenshot N, callout N)" inline to the matching sub_step sentence.
+        # Callout 1 → sub_step[0], callout 2 → sub_step[1], etc.
+        # Extra callouts beyond the sub_step count are appended to the description.
+        for idx, c in enumerate(callouts):
+            num = c.get("callout_number") or (idx + 1)
+            ref = f"(Screenshot {seq}, callout {num})"
+            if idx < len(sub_steps):
+                text = sub_steps[idx].rstrip(".")
+                sub_steps[idx] = f"{text}. {ref}"
+            else:
+                # More callouts than sub_steps — attach to description
+                description = description.rstrip(".") + f". {ref}"
+
         steps_ctx.append({
-            "sequence": step.get("sequence", ""),
+            "sequence": seq,
             "title": _sanitize_text(step.get("title") or ""),
-            "description": _sanitize_text(step.get("description") or ""),
-            "sub_steps": [_sanitize_text(str(s)) for s in (step.get("sub_steps") or []) if s is not None],
+            "description": description,
+            "sub_steps": sub_steps,
             "screenshot": screenshot,
-            "callouts": [
-                {
-                    "callout_number": c.get("callout_number"),
-                    "label": _sanitize_text(c.get("label") or ""),
-                }
-                for c in (step.get("callouts") or [])
-            ],
+            "callouts": [],  # all references now inline — suppress the after-screenshot block
         })
 
     # Split sections: display_order < 50 before procedure, >= 50 after

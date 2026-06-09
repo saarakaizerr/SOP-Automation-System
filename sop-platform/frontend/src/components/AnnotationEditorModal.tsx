@@ -466,9 +466,9 @@ export function AnnotationEditorModal({
                             sceneFunc={(ctx, shape) => {
                               ctx.beginPath()
                               ctx.moveTo(-23, -17)
-                              ctx.lineTo(11, -17)
+                              ctx.lineTo(7, -17)
                               ctx.lineTo(23, 0)
-                              ctx.lineTo(11, 17)
+                              ctx.lineTo(7, 17)
                               ctx.lineTo(-23, 17)
                               ctx.closePath()
                               ctx.fillStrokeShape(shape)

@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 # Badge base dimensions (canvas px — matches the editor's Konva shape exactly)
 # Main pentagon:      w=38  h=28  tip=13
-# Highlight pentagon: w=46  h=34  tip=12  (white fill, blue border — active/selected state)
+# Highlight pentagon: w=46  h=34  tip=16  (white fill, red border; tip=16 preserves same slope as main)
 BADGE_TEXT   = (255, 255, 255)
 BADGE_HL_CLR = (220, 38, 38)     # red #DC2626 — selection indicator border
 FONT_SIZE    = 12                # matches editor fontSize=12
@@ -118,8 +118,9 @@ def _draw_callout(
     bx = float(min(max(margin, cx), iw - margin))
     by = float(min(max(margin, cy), ih - margin))
 
-    # 1 — Highlight (active selection style): w=46 h=34 tip=12, white fill, blue border
-    hl_pts = _pentagon_pts(bx, by, 46, 34, 12, scale, rotation)
+    # 1 — Highlight (active selection style): w=46 h=34 tip=16, white fill, red border
+    # tip=16 keeps same diagonal slope as main pentagon (hh/tip = 14/13 = 17/16.something ≈ 16)
+    hl_pts = _pentagon_pts(bx, by, 46, 34, 16, scale, rotation)
     border_w = max(2, int(3 * scale))
     draw.polygon(hl_pts, fill=(255, 255, 255), outline=BADGE_HL_CLR, width=border_w)
 

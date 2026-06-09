@@ -1,14 +1,15 @@
 import { createFileRoute, useParams } from '@tanstack/react-router'
-import { useQuery } from '@tanstack/react-query'
-import { useEffect, useCallback } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useEffect, useCallback, useRef } from 'react'
 import { useSOPStore } from '../hooks/useSOPStore'
 import { useStepSync } from '../hooks/useStepSync'
+import { useAuth } from '../hooks/useAuth'
 import { StepSidebar } from '../components/StepSidebar'
 import { StepCard } from '../components/StepCard'
 import { VideoPlayer } from '../components/VideoPlayer'
 import { TranscriptPanel } from '../components/TranscriptPanel'
 import { SOPPageHeader } from '../components/SOPPageHeader'
-import { fetchSOP, fetchTranscript, trackView, sopKeys } from '../api/client'
+import { fetchSOP, fetchTranscript, trackView, sopKeys, renderAnnotated } from '../api/client'
 
 export const Route = createFileRoute('/sop/$id/procedure')({
   component: ProcedurePage,
@@ -27,6 +28,10 @@ function ProcedurePage() {
     queryFn: () => fetchTranscript(id),
     enabled: !!sop,
   })
+
+  const { appUser } = useAuth()
+  const queryClient = useQueryClient()
+  const autoRenderFired = useRef(false)
 
   const { selectedStepId, setSelectedStep } = useSOPStore()
   const { playerRef, handleTimeUpdate, seekTo } = useStepSync(sop?.steps ?? [])
@@ -79,6 +84,32 @@ function ProcedurePage() {
       setSelectedStep(sop.steps[0].id)
     }
   }, [sop, selectedStepId, setSelectedStep])
+
+  // Auto-render annotated screenshots for steps that have callouts but no overlay image yet.
+  // On first load after CALLOUT_RENDER_VERSION bump, re-renders ALL steps to pick up visual fixes.
+  const CALLOUT_RENDER_VERSION = 'v2'
+  useEffect(() => {
+    if (!sop || autoRenderFired.current) return
+    const role = appUser?.role
+    if (role !== 'editor' && role !== 'admin') return
+
+    const versionKey = `callout_rv_${id}`
+    const isVersionCurrent = localStorage.getItem(versionKey) === CALLOUT_RENDER_VERSION
+    const pending = isVersionCurrent
+      ? sop.steps.filter(s => s.callouts.length > 0 && !s.annotated_screenshot_url)
+      : sop.steps.filter(s => s.callouts.length > 0)
+    if (!isVersionCurrent) localStorage.setItem(versionKey, CALLOUT_RENDER_VERSION)
+
+    if (pending.length === 0) return
+
+    autoRenderFired.current = true
+    Promise.all(pending.map(s => renderAnnotated(s.id).catch(() => null))).then(results => {
+      if (results.some(Boolean)) {
+        queryClient.invalidateQueries({ queryKey: sopKeys.detail(id) })
+      }
+    })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sop, appUser, id, queryClient])
 
   if (!sop) return null
 

@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import type { SOPStep, TranscriptLine } from '../api/types'
 import { useAuth } from '../hooks/useAuth'
-import { approveStep, renameStep, updateSubSteps, updateStepDescription, deleteStep, sopKeys } from '../api/client'
+import { approveStep, renameStep, updateSubSteps, updateStepDescription, deleteStep, renderAnnotated, sopKeys } from '../api/client'
 import { CalloutList } from './CalloutList'
 import { DiscussionCard } from './DiscussionCard'
 import { ScreenshotModal } from './ScreenshotModal'
@@ -77,6 +77,7 @@ export function StepCard({ step, transcriptLines, onSeek, onDelete, onPrev, onNe
   const { appUser } = useAuth()
   const qc = useQueryClient()
   const canEdit = appUser?.role === 'editor' || appUser?.role === 'admin'
+  const autoRenderRef = useRef<string | null>(null)
 
   const updateCache = (updated: SOPStep | null) => {
     if (!updated) return
@@ -134,6 +135,21 @@ export function StepCard({ step, transcriptLines, onSeek, onDelete, onPrev, onNe
     setEditingSubSteps(false)
     setConfirmDelete(false)
   }, [step?.id])
+
+  // Auto-render annotated screenshot when this step has callouts but no overlay image yet
+  useEffect(() => {
+    if (!step || !canEdit) return
+    if (!step.callouts.length || step.annotated_screenshot_url) return
+    if (autoRenderRef.current === step.id) return
+    autoRenderRef.current = step.id
+    renderAnnotated(step.id)
+      .then(res => {
+        qc.setQueryData<any>(sopKeys.detail(step.sop_id), (old: any) =>
+          old ? { ...old, steps: old.steps.map((s: SOPStep) => s.id === step.id ? { ...s, annotated_screenshot_url: res.annotated_screenshot_url } : s) } : old
+        )
+      })
+      .catch(() => {})
+  }, [step?.id, step?.callouts.length, step?.annotated_screenshot_url, canEdit, qc])
 
   if (!step) {
     return (

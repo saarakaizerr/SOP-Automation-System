@@ -31,7 +31,7 @@ BORDER   = RGBColor(0xD1, 0xD5, 0xDB)   # table border
 
 TEMPLATE_PATH = Path("/data/templates/sop_template.docx")
 _VERSION_PATH = TEMPLATE_PATH.with_suffix(".version")
-_TEMPLATE_VERSION = "21"  # increment when template structure changes
+_TEMPLATE_VERSION = "22"  # increment when template structure changes
 
 _ASSETS_DIR = Path(__file__).parent / "assets"
 _HEADER_IMG = _ASSETS_DIR / "header1.jpg"
@@ -409,21 +409,16 @@ def build(force: bool = False):
     p_ss_label.alignment = WD_ALIGN_PARAGRAPH.CENTER
     for run in p_ss_label.runs:
         _set_run_font(run, 11, bold=True, color=DARK)
-    _set_para_spacing(p_ss_label, before_pt=0, after_pt=10)
+    _set_para_spacing(p_ss_label, before_pt=0, after_pt=6)
     _ctrl_para(doc, "{%- endif %}")
 
-    # Callouts
+    # Callouts — numbered list directly below the screenshot caption (no heading)
     _ctrl_para(doc, "{%- if step.callouts %}")
-
-    p_callout_head = doc.add_paragraph("Callout References")
-    p_callout_head.style = "Normal"
-    for run in p_callout_head.runs:
-        _set_run_font(run, 10, bold=True, italic=True, color=DARK)
-    _set_para_spacing(p_callout_head, before_pt=4, after_pt=2)
-
     _ctrl_para(doc, "{%- for callout in step.callouts %}")
-    p_cl = doc.add_paragraph("{{ callout.callout_number }}. {{ callout.label }}")
-    p_cl.style = "List Number"
+    p_cl = doc.add_paragraph("{{ callout.callout_number }}.  {{ callout.label }}")
+    p_cl.style = "Normal"
+    for run in p_cl.runs:
+        _set_run_font(run, 10, color=DARK)
     _set_para_spacing(p_cl, before_pt=0, after_pt=2)
     _ctrl_para(doc, "{%- endfor %}")
     _ctrl_para(doc, "{%- endif %}")

@@ -242,6 +242,7 @@ export interface ProcessMapAssignment {
   step_id: string
   lane_id: string
   is_decision: boolean
+  no_target_step_id?: string | null
 }
 
 export interface ProcessMapConfig {

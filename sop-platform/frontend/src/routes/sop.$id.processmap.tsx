@@ -36,9 +36,11 @@ function generateSwimlane(
   const BOX_H = 54
   const HEADER_H = 52
   const MARGIN = 16
+  const START_H = 64   // vertical space reserved for Start node
+  const END_H = 64     // vertical space reserved for End node
 
   const W = MARGIN + lanes.length * LANE_W + MARGIN
-  const H = MARGIN + HEADER_H + assignments.length * ROW_H + MARGIN
+  const H = MARGIN + HEADER_H + START_H + assignments.length * ROW_H + END_H + MARGIN
 
   const laneIndex: Record<string, number> = {}
   lanes.forEach((l, i) => { laneIndex[l.id] = i })
@@ -46,13 +48,17 @@ function generateSwimlane(
   const stepById: Record<string, SOPStep> = {}
   steps.forEach(s => { stepById[s.id] = s })
 
+  // cy is offset by START_H so step rows sit below the Start node
   const boxCenter = (assignIdx: number, laneId: string) => {
     const li = laneIndex[laneId] ?? 0
     return {
       cx: MARGIN + li * LANE_W + LANE_W / 2,
-      cy: MARGIN + HEADER_H + assignIdx * ROW_H + ROW_H / 2,
+      cy: MARGIN + HEADER_H + START_H + assignIdx * ROW_H + ROW_H / 2,
     }
   }
+
+  const arrowhead = (x: number, y: number) =>
+    `<polygon points="${x - 5},${y} ${x + 5},${y} ${x},${y + 8}" fill="#94A3B8"/>`
 
   let svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" font-family="system-ui,sans-serif">`
 
@@ -66,7 +72,6 @@ function generateSwimlane(
     svg += `<rect x="${lx}" y="${MARGIN}" width="${LANE_W}" height="${H - MARGIN * 2}" fill="${isEven ? '#FFFFFF' : '#F1F5F9'}" rx="0"/>`
     svg += `<rect x="${lx}" y="${MARGIN}" width="${LANE_W}" height="${HEADER_H}" fill="${lane.color}" rx="0"/>`
     svg += `<text x="${lx + LANE_W / 2}" y="${MARGIN + HEADER_H / 2 + 5}" text-anchor="middle" font-size="13" font-weight="600" fill="#FFFFFF">${escapeXml(lane.name)}</text>`
-    // Column dividers
     if (i > 0) {
       svg += `<line x1="${lx}" y1="${MARGIN}" x2="${lx}" y2="${H - MARGIN}" stroke="#CBD5E1" stroke-width="1"/>`
     }
@@ -75,30 +80,49 @@ function generateSwimlane(
   // Outer border
   svg += `<rect x="${MARGIN}" y="${MARGIN}" width="${W - MARGIN * 2}" height="${H - MARGIN * 2}" fill="none" stroke="#CBD5E1" stroke-width="1.5" rx="4"/>`
 
-  // Draw arrows first (behind boxes)
+  // ── Start node ──────────────────────────────────────────────────────────────
+  const firstLaneIdx = laneIndex[assignments[0].lane_id] ?? 0
+  const startCx = MARGIN + firstLaneIdx * LANE_W + LANE_W / 2
+  const startCy = MARGIN + HEADER_H + START_H / 2
+  svg += `<ellipse cx="${startCx}" cy="${startCy}" rx="44" ry="20" fill="#22C55E" stroke="#15803D" stroke-width="2"/>`
+  svg += `<text x="${startCx}" y="${startCy + 5}" text-anchor="middle" font-size="13" font-weight="700" fill="#FFFFFF">Start</text>`
+  // Arrow: Start → first step
+  const firstStep = boxCenter(0, assignments[0].lane_id)
+  const startArrowY2 = firstStep.cy - BOX_H / 2 - 8
+  svg += `<line x1="${startCx}" y1="${startCy + 20}" x2="${startCx}" y2="${startArrowY2}" stroke="#94A3B8" stroke-width="1.5"/>`
+  svg += arrowhead(startCx, startArrowY2)
+
+  // ── Step arrows (behind boxes) ──────────────────────────────────────────────
   assignments.forEach((asgn, i) => {
     if (i >= assignments.length - 1) return
     const from = boxCenter(i, asgn.lane_id)
     const to = boxCenter(i + 1, assignments[i + 1].lane_id)
 
+    const decisionHH = BOX_H / 2 + 4
     const x1 = from.cx
-    const y1 = from.cy + BOX_H / 2
+    const y1 = asgn.is_decision ? from.cy + decisionHH : from.cy + BOX_H / 2
     const x2 = to.cx
-    const y2 = to.cy - BOX_H / 2 - 8
+    const y2 = assignments[i + 1].is_decision
+      ? to.cy - (BOX_H / 2 + 4) - 8
+      : to.cy - BOX_H / 2 - 8
 
     if (Math.abs(x1 - x2) < 4) {
-      // Same lane — straight vertical
-      svg += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2 + 6}" stroke="#94A3B8" stroke-width="1.5" stroke-dasharray="${asgn.lane_id !== assignments[i + 1].lane_id ? '4,3' : 'none'}"/>`
+      svg += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2 + 6}" stroke="#94A3B8" stroke-width="1.5"/>`
     } else {
-      // Cross-lane — L-shape: down → across → down
       const midY = from.cy + ROW_H / 2
       svg += `<polyline points="${x1},${y1} ${x1},${midY} ${x2},${midY} ${x2},${y2 + 6}" stroke="#94A3B8" stroke-width="1.5" fill="none"/>`
     }
-    // Arrowhead
-    svg += `<polygon points="${x2 - 5},${y2 + 6} ${x2 + 5},${y2 + 6} ${x2},${y2 + 14}" fill="#94A3B8"/>`
+    svg += arrowhead(x2, y2 + 6)
+
+    // "Yes" label on downward connector from a decision node
+    if (asgn.is_decision) {
+      const labelX = x1 + 6
+      const labelY = y1 + (y2 - y1) / 2
+      svg += `<text x="${labelX}" y="${labelY}" font-size="10" fill="#22C55E" font-weight="600">Yes</text>`
+    }
   })
 
-  // Draw step boxes
+  // ── Step boxes ──────────────────────────────────────────────────────────────
   assignments.forEach((asgn, i) => {
     const { cx, cy } = boxCenter(i, asgn.lane_id)
     const x = cx - BOX_W / 2
@@ -110,19 +134,38 @@ function generateSwimlane(
     const color = lane?.color ?? '#6B7280'
 
     if (asgn.is_decision) {
-      // Diamond shape
       const hw = BOX_W / 2
       const hh = BOX_H / 2 + 4
       svg += `<polygon points="${cx},${cy - hh} ${cx + hw},${cy} ${cx},${cy + hh} ${cx - hw},${cy}" fill="#FFFBEB" stroke="${color}" stroke-width="2"/>`
       svg += `<text x="${cx}" y="${cy - 5}" text-anchor="middle" font-size="10" fill="#92400E">${seqNum}. ${escapeXml(truncate(title, 24))}</text>`
       svg += `<text x="${cx}" y="${cy + 8}" text-anchor="middle" font-size="9" fill="#92400E" opacity="0.7">Decision</text>`
+
+      // "No" branch — stays inside SVG right margin
+      const noTargetIdx = asgn.no_target_step_id
+        ? assignments.findIndex(a => a.step_id === asgn.no_target_step_id)
+        : -1
+      const noLabel = `<text x="${cx + hw + 6}" y="${cy - 5}" font-size="10" fill="#EF4444" font-weight="600">No</text>`
+      if (noTargetIdx >= 0) {
+        const target = boxCenter(noTargetIdx, assignments[noTargetIdx].lane_id)
+        // Route: right of diamond → right rail (inside SVG) → target row → into target box right side
+        const rail = W - MARGIN - 8
+        const targetEntryX = target.cx + BOX_W / 2
+        svg += `<polyline points="${cx + hw},${cy} ${rail},${cy} ${rail},${target.cy} ${targetEntryX + 6},${target.cy}" stroke="#EF4444" stroke-width="1.5" stroke-dasharray="5,3" fill="none"/>`
+        // Arrowhead pointing LEFT into target box
+        svg += `<polygon points="${targetEntryX + 8},${target.cy - 5} ${targetEntryX},${target.cy} ${targetEntryX + 8},${target.cy + 5}" fill="#EF4444"/>`
+        svg += noLabel
+      } else {
+        // No target — stub with vertical terminator bar
+        const noX1 = cx + hw
+        const noX2 = Math.min(W - MARGIN - 10, noX1 + 52)
+        svg += `<line x1="${noX1}" y1="${cy}" x2="${noX2}" y2="${cy}" stroke="#EF4444" stroke-width="1.5" stroke-dasharray="4,3"/>`
+        svg += `<line x1="${noX2}" y1="${cy - 7}" x2="${noX2}" y2="${cy + 7}" stroke="#EF4444" stroke-width="2.5" stroke-linecap="round"/>`
+        svg += noLabel
+      }
     } else {
-      // Rounded rectangle
       svg += `<rect x="${x}" y="${y}" width="${BOX_W}" height="${BOX_H}" rx="8" fill="#FFFFFF" stroke="${color}" stroke-width="2" filter="url(#shadow)"/>`
-      // Step number circle
       svg += `<circle cx="${x + 18}" cy="${cy}" r="12" fill="${color}"/>`
       svg += `<text x="${x + 18}" y="${cy + 4}" text-anchor="middle" font-size="10" font-weight="700" fill="#FFFFFF">${seqNum}</text>`
-      // Title
       const lines = wrapText(title, 22)
       const startY = cy - (lines.length - 1) * 7
       lines.forEach((line, li) => {
@@ -130,6 +173,18 @@ function generateSwimlane(
       })
     }
   })
+
+  // ── End node ────────────────────────────────────────────────────────────────
+  const lastAsgn = assignments[assignments.length - 1]
+  const lastLaneIdx = laneIndex[lastAsgn.lane_id] ?? 0
+  const endCx = MARGIN + lastLaneIdx * LANE_W + LANE_W / 2
+  const endCy = MARGIN + HEADER_H + START_H + assignments.length * ROW_H + END_H / 2
+  const lastStep = boxCenter(assignments.length - 1, lastAsgn.lane_id)
+  const lastBottomY = lastAsgn.is_decision ? lastStep.cy + BOX_H / 2 + 4 : lastStep.cy + BOX_H / 2
+  svg += `<line x1="${endCx}" y1="${lastBottomY}" x2="${endCx}" y2="${endCy - 20}" stroke="#94A3B8" stroke-width="1.5"/>`
+  svg += arrowhead(endCx, endCy - 22)
+  svg += `<ellipse cx="${endCx}" cy="${endCy}" rx="40" ry="20" fill="#EF4444" stroke="#B91C1C" stroke-width="2"/>`
+  svg += `<text x="${endCx}" y="${endCy + 5}" text-anchor="middle" font-size="13" font-weight="700" fill="#FFFFFF">End</text>`
 
   svg += `<defs><filter id="shadow" x="-10%" y="-10%" width="120%" height="130%"><feDropShadow dx="0" dy="1" stdDeviation="2" flood-opacity="0.08"/></filter></defs>`
   svg += `</svg>`
@@ -358,11 +413,31 @@ function StepAssigner({
                 <input
                   type="checkbox"
                   checked={asgn.is_decision}
-                  onChange={e => update(i, { is_decision: e.target.checked })}
+                  onChange={e => update(i, { is_decision: e.target.checked, no_target_step_id: null })}
                   className="w-3.5 h-3.5 accent-amber-500"
                 />
                 Decision
               </label>
+
+              {/* No branch target — only visible when is_decision */}
+              {asgn.is_decision && (
+                <select
+                  value={asgn.no_target_step_id ?? ''}
+                  onChange={e => update(i, { no_target_step_id: e.target.value || null })}
+                  className="text-xs border border-red-300 rounded-lg px-2 py-1.5 bg-card text-red-600 shrink-0 focus:outline-none focus:ring-2 focus:ring-red-400 max-w-[130px]"
+                  title="No branch goes to…"
+                >
+                  <option value="">No → (unset)</option>
+                  {assignments
+                    .filter((_, j) => j !== i)
+                    .map(a => {
+                      const s = steps.find(st => st.id === a.step_id)
+                      return s ? (
+                        <option key={s.id} value={s.id}>No → Step {s.sequence}</option>
+                      ) : null
+                    })}
+                </select>
+              )}
 
               {/* Lane selector */}
               <select
@@ -508,7 +583,15 @@ function PreviewPane({
         </div>
       )}
 
-      <div className="flex gap-3 text-xs text-muted">
+      <div className="flex flex-wrap gap-3 text-xs text-muted">
+        <span className="flex items-center gap-1.5">
+          <span className="w-4 h-4 rounded-full bg-green-500 inline-block"/>
+          Start
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="w-4 h-4 rounded-full bg-red-500 inline-block"/>
+          End
+        </span>
         <span className="flex items-center gap-1.5">
           <span className="w-4 h-4 rounded bg-card border-2 inline-block" style={{ borderColor: '#3B82F6' }}/>
           Standard step
@@ -517,7 +600,7 @@ function PreviewPane({
           <svg viewBox="0 0 16 16" className="w-4 h-4" style={{ color: '#F59E0B' }}>
             <polygon points="8,1 15,8 8,15 1,8" fill="none" stroke="currentColor" strokeWidth="1.5"/>
           </svg>
-          Decision point
+          Decision (Yes ↓ / No →)
         </span>
       </div>
     </div>
