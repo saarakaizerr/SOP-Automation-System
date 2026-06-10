@@ -629,7 +629,11 @@ async def sync_sharepoint(
         raise HTTPException(status_code=503, detail="WF-detect webhook URL not configured")
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.post(settings.n8n_wf_detect_webhook_url, json={})
+            resp = await client.post(
+                settings.n8n_wf_detect_webhook_url,
+                json={},
+                headers={"x-internal-key": settings.internal_api_key},
+            )
             resp.raise_for_status()
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"Failed to trigger WF-detect: {exc}")
@@ -700,6 +704,7 @@ async def start_pipeline(
             resp = await client.post(
                 settings.n8n_wf0_webhook_url,
                 json={"sop_id": str(sop_id), "video_url": sop.video_url},
+                headers={"x-internal-key": settings.internal_api_key},
             )
             resp.raise_for_status()
     except Exception as exc:

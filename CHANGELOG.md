@@ -2,6 +2,60 @@
 
 ---
 
+## 2026-06-03 (2)
+
+### Bug Fix — API 500 / CORS on Live App (processing_sections enum mismatch)
+
+**Symptom**
+`sopapp.cloudnavision.com` showing CORS errors and "Failed to load SOPs: Failed to fetch". Azure Container App API returning 500 on all `/api/sops` requests.
+
+**Root Cause**
+WF5's atomic claim fix added `processing_sections` as a new value to the `pipeline_status` PostgreSQL enum via:
+```sql
+ALTER TYPE pipeline_status ADD VALUE IF NOT EXISTS 'processing_sections';
+```
+However, the SQLAlchemy `PipelineStatus` enum in `api/app/models.py` was not updated to include this value. When the API queried `pipeline_runs` and encountered any row with `status = 'processing_sections'`, SQLAlchemy threw:
+```
+LookupError: 'processing_sections' is not among the defined enum values. 
+Enum name: pipeline_status.
+```
+This 500 error caused CORS headers to not be sent, appearing as a CORS error in the browser.
+
+**Fix**
+Added `processing_sections = "processing_sections"` to the `PipelineStatus` enum in `models.py`.
+
+**Rule**
+Whenever a new value is added to a PostgreSQL enum via SQL migration, the corresponding Python `enum.Enum` class in `models.py` must be updated simultaneously.
+
+---
+
+## 2026-06-03
+
+### Bug Fix — Live App CORS Errors + Microsoft Auth Failure
+
+**Symptoms**
+1. `sopapp.cloudnavision.com` showing CORS errors: `Access to fetch at 'https://soptest.cloudnavision.com/api/sops' from origin 'https://sopapp.cloudnavision.com' has been blocked by CORS policy`
+2. Microsoft OAuth login failing with `Unable to exchange external code: 1.Ab` on both live app and localhost
+
+**Root Cause (CORS)**
+`VITE_API_URL` GitHub Secret was set to `https://soptest.cloudnavision.com` (Cloudflare Tunnel → local machine). The live frontend was routing all API calls through the local machine instead of the Azure Container App API. When local Docker was not running the tunnel profile, `soptest.cloudnavision.com` returned HTML error pages with no CORS headers.
+
+**Root Cause (Auth)**
+The Microsoft Azure AD app client secret expired. Supabase could not exchange the OAuth authorization code with Microsoft → `500: Unable to exchange external code`.
+
+**Fix**
+1. Updated `VITE_API_URL` GitHub Secret to `https://sop-api.whitemeadow-cfe4a842.southeastasia.azurecontainerapps.io` — live app now calls Azure Container App API directly
+2. Updated Supabase → Authentication → Providers → Azure → Secret Value with new client secret provided by TL
+3. Added `https://sopapp.cloudnavision.com/**` and `http://localhost:5173/**` to Supabase allowed redirect URLs
+
+**Verification**
+Login and full app functionality confirmed working on `https://sopapp.cloudnavision.com` in incognito.
+
+**Note**
+`soptest.cloudnavision.com` (Cloudflare Tunnel) remains for local dev and n8n workflow callbacks only — no longer used as the production API path.
+
+---
+
 ## 2026-05-18
 
 ### Bug Fix — Cloudflare Tunnel 502 / CORS Login Error (Local Docker)
