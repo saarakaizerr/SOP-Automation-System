@@ -30,6 +30,7 @@ async def start_export(
     sop_id: UUID,
     current_user: Annotated[User, Depends(require_viewer)],
     fmt: str = Query("docx", alias="format", pattern="^(docx|pdf)$"),
+    template: str = Query("standard", pattern="^(standard|meeting_minutes|webinar)$"),
     db: AsyncSession = Depends(get_db),
     background_tasks: BackgroundTasks = BackgroundTasks(),
 ) -> dict:
@@ -44,10 +45,11 @@ async def start_export(
         "download_url": None,
         "filename": None,
         "format": fmt,
+        "template": template,
         "error": None,
     }
 
-    background_tasks.add_task(_run_export, export_id, sop_id, fmt, current_user.id)
+    background_tasks.add_task(_run_export, export_id, sop_id, fmt, current_user.id, template)
     return {"export_id": export_id, "status": "pending"}
 
 
@@ -63,7 +65,7 @@ async def get_export_status(
     return job
 
 
-async def _run_export(export_id: str, sop_id: UUID, fmt: str, user_id: UUID) -> None:
+async def _run_export(export_id: str, sop_id: UUID, fmt: str, user_id: UUID, template: str = "standard") -> None:
     """Background task: run full export pipeline and update job store."""
     def _fail(msg: str) -> None:
         _export_jobs[export_id] = {
@@ -133,6 +135,7 @@ async def _run_export(export_id: str, sop_id: UUID, fmt: str, user_id: UUID) -> 
             render_payload = {
                 "sop_id": str(sop_id),
                 "format": fmt,
+                "template": template,
                 "azure_blob_base_url": settings.azure_blob_base_url,
                 "azure_sas_token": settings.azure_blob_sas_token,
                 "sop_data": sop_data,
@@ -169,7 +172,8 @@ async def _run_export(export_id: str, sop_id: UUID, fmt: str, user_id: UUID) -> 
             await db.commit()
 
             download_url = with_sas(file_url_base) or file_url_base
-            filename = f"sop_{sop_id}.{fmt}"
+            prefix = {"meeting_minutes": "meeting_minutes", "webinar": "webinar"}.get(template, "sop")
+            filename = f"{prefix}_{sop_id}.{fmt}"
 
             _export_jobs[export_id] = {
                 "status": "done",

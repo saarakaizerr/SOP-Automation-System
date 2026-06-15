@@ -36,10 +36,11 @@ def _sanitize_text(text: str) -> str:
 
 def render_sop(
     sop_id: str,
-    fmt: str,                   # 'docx' or 'pdf'
+    fmt: str,                       # 'docx' or 'pdf'
     sop_data: dict,
-    azure_blob_base_url: str,   # e.g. https://cnavinfsop.blob.core.windows.net/infsop
+    azure_blob_base_url: str,
     azure_sas_token: str,
+    template: str = "standard",     # 'standard' | 'meeting_minutes' | 'webinar'
 ) -> dict:
     """
     Render a SOP document from the Word template.
@@ -48,15 +49,37 @@ def render_sop(
         {"docx_url": str, "pdf_url": str | None}
         URLs are base Azure Blob URLs without SAS (safe for DB storage).
     """
-    # Rebuild template if missing or outdated
+    # Select template file, builder, context function, and filename prefix
+    if template == "meeting_minutes":
+        from app.build_template_meeting_minutes import (
+            build as _build_tpl,
+            TEMPLATE_PATH as _tmpl_path,
+        )
+        _context_fn = _build_context_meeting_minutes
+        doc_prefix  = "meeting_minutes"
+        run_post_process = False
+    elif template == "webinar":
+        from app.build_template_webinar import (
+            build as _build_tpl,
+            TEMPLATE_PATH as _tmpl_path,
+        )
+        _context_fn = _build_context_webinar
+        doc_prefix  = "webinar"
+        run_post_process = False
+    else:
+        from app.build_template import build as _build_tpl
+        _tmpl_path = TEMPLATE_PATH
+        _context_fn = None          # uses _build_context with table_registry
+        doc_prefix  = "sop"
+        run_post_process = True
+
     try:
-        from app.build_template import build as build_template
-        build_template(force=False)
+        _build_tpl(force=False)
     except Exception as exc:
         logger.warning("Template builder failed: %s", exc)
 
-    if not TEMPLATE_PATH.exists():
-        raise FileNotFoundError(f"Template not found: {TEMPLATE_PATH}")
+    if not _tmpl_path.exists():
+        raise FileNotFoundError(f"Template not found: {_tmpl_path}")
 
     export_dir = EXPORTS_DIR / sop_id
     export_dir.mkdir(parents=True, exist_ok=True)
@@ -64,26 +87,27 @@ def render_sop(
     with tempfile.TemporaryDirectory(prefix=f"sop_render_{sop_id}_") as tmp_str:
         tmp_dir = Path(tmp_str)
 
-        tpl = DocxTemplate(str(TEMPLATE_PATH))
+        tpl = DocxTemplate(str(_tmpl_path))
         table_registry: dict[str, list] = {}
-        context = _build_context(tpl, sop_data, tmp_dir, table_registry, azure_sas_token=azure_sas_token)
+
+        if _context_fn is not None:
+            context = _context_fn(tpl, sop_data, tmp_dir, azure_sas_token=azure_sas_token)
+        else:
+            context = _build_context(tpl, sop_data, tmp_dir, table_registry, azure_sas_token=azure_sas_token)
+
         tpl.render(context)
 
-        # Save rendered docx
-        docx_filename = f"sop_{sop_id}.docx"
+        docx_filename = f"{doc_prefix}_{sop_id}.docx"
         docx_path = export_dir / docx_filename
         tpl.save(str(docx_path))
 
-        # Post-process: replace table placeholders with real Word tables
-        if table_registry:
-            _inject_tables(docx_path, table_registry)
-
-        # Post-process: add TOC hyperlinks (bookmarks on headings + hyperlink fields in TOC)
-        _inject_toc_links(docx_path)
+        if run_post_process:
+            if table_registry:
+                _inject_tables(docx_path, table_registry)
+            _inject_toc_links(docx_path)
 
         logger.info("Rendered DOCX: %s (%.1f KB)", docx_path, docx_path.stat().st_size / 1024)
 
-        # Upload DOCX
         docx_blob_path = f"exports/{sop_id}/{docx_filename}"
         docx_base_url = f"{azure_blob_base_url}/{docx_blob_path}"
         _upload_blob(
@@ -326,6 +350,94 @@ def _inject_toc_links(docx_path: Path) -> None:
 
     except Exception as exc:
         logger.warning("TOC link injection failed (non-fatal): %s", exc)
+
+
+# ── Generic-template context builders ────────────────────────────────────────
+
+def _build_context_meeting_minutes(
+    tpl: DocxTemplate, sop_data: dict, tmp_dir: Path, azure_sas_token: str = ""
+) -> dict:
+    """Context for the Meeting Minutes template."""
+    steps_raw = sop_data.get("steps", [])
+    agenda_items = []
+    for step in steps_raw:
+        screenshot = None
+        ann_url = step.get("annotated_screenshot_url") or step.get("screenshot_url")
+        if ann_url:
+            screenshot = _download_inline_image(tpl, ann_url, tmp_dir, step.get("id", "unknown"))
+        agenda_items.append({
+            "sequence":        step.get("sequence", ""),
+            "title":           _sanitize_text(step.get("title") or ""),
+            "discussion_notes": _sanitize_text(step.get("description") or ""),
+            "action_items":    [_sanitize_text(str(s)) for s in (step.get("sub_steps") or []) if s],
+            "screenshot":      screenshot,
+        })
+
+    all_sections = sop_data.get("sections") or []
+    follow_up = [
+        {
+            "section_title": _sanitize_text(s.get("section_title") or ""),
+            "content_text":  _sanitize_text(s.get("content_text") or ""),
+        }
+        for s in all_sections
+    ]
+
+    today = date.today().strftime("%d %b %Y")
+    return {
+        "doc_title":         _sanitize_text(sop_data.get("process_name") or sop_data.get("sop_title") or ""),
+        "meeting_date":      _sanitize_text(sop_data.get("meeting_date") or today),
+        "location":          "",
+        "facilitator":       _sanitize_text(sop_data.get("client_name") or ""),
+        "generated_date":    today,
+        "attendees":         "",
+        "agenda_items":      agenda_items,
+        "follow_up_sections": follow_up,
+    }
+
+
+def _build_context_webinar(
+    tpl: DocxTemplate, sop_data: dict, tmp_dir: Path, azure_sas_token: str = ""
+) -> dict:
+    """Context for the Webinar Summary template."""
+    steps_raw    = sop_data.get("steps", [])
+    all_sections = sop_data.get("sections") or []
+
+    # First pre-section (display_order < 50) → overview; rest → resources
+    pre_sections  = [s for s in all_sections if (s.get("display_order") or 0) < 50]
+    post_sections = [s for s in all_sections if (s.get("display_order") or 0) >= 50]
+    overview_text = _sanitize_text((pre_sections[0].get("content_text") or "") if pre_sections else "")
+    resource_secs = pre_sections[1:] + post_sections
+
+    topics = []
+    for step in steps_raw:
+        screenshot = None
+        ann_url = step.get("annotated_screenshot_url") or step.get("screenshot_url")
+        if ann_url:
+            screenshot = _download_inline_image(tpl, ann_url, tmp_dir, step.get("id", "unknown"))
+        topics.append({
+            "number":     step.get("sequence", ""),
+            "title":      _sanitize_text(step.get("title") or ""),
+            "content":    _sanitize_text(step.get("description") or ""),
+            "key_points": [_sanitize_text(str(s)) for s in (step.get("sub_steps") or []) if s],
+            "screenshot": screenshot,
+        })
+
+    today = date.today().strftime("%d %b %Y")
+    return {
+        "doc_title":       _sanitize_text(sop_data.get("process_name") or sop_data.get("sop_title") or ""),
+        "session_date":    _sanitize_text(sop_data.get("meeting_date") or today),
+        "presenter":       _sanitize_text(sop_data.get("client_name") or ""),
+        "generated_date":  today,
+        "overview_text":   overview_text,
+        "topics":          topics,
+        "resource_sections": [
+            {
+                "section_title": _sanitize_text(s.get("section_title") or ""),
+                "content_text":  _sanitize_text(s.get("content_text") or ""),
+            }
+            for s in resource_secs
+        ],
+    }
 
 
 # ── Context builder ───────────────────────────────────────────────────────────

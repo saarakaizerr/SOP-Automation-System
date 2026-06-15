@@ -51,6 +51,12 @@ export const fetchTranscript = (id: string, speaker?: string) => {
   return fetchAPI<TranscriptLine[]>(`/api/sops/${id}/transcript${params}`)
 }
 export const fetchSections = (id: string) => fetchAPI<SOPSection[]>(`/api/sops/${id}/sections`)
+export const createSection = (sopId: string, body: { section_title: string; content_type: string; content_text?: string }) =>
+  mutateAPI<SOPSection>(`/api/sops/${sopId}/sections`, 'POST', body)
+export const updateSection = (sectionId: string, body: { section_title?: string; content_type?: string; content_text?: string; content_json?: unknown }) =>
+  mutateAPI<SOPSection>(`/api/sections/${sectionId}`, 'PATCH', body)
+export const deleteSection = (sectionId: string) =>
+  mutateAPI<null>(`/api/sections/${sectionId}`, 'DELETE')
 export const fetchWatchlist = (id: string) => fetchAPI<WatchlistItem[]>(`/api/sops/${id}/watchlist`)
 
 export interface ExportResponse {
@@ -59,11 +65,13 @@ export interface ExportResponse {
   format: string
 }
 
-export async function exportSOP(id: string, format: 'docx' | 'pdf'): Promise<ExportResponse> {
+export type ExportTemplate = 'standard' | 'meeting_minutes' | 'webinar'
+
+export async function exportSOP(id: string, format: 'docx' | 'pdf', template: ExportTemplate = 'standard'): Promise<ExportResponse> {
   const headers = await getAuthHeaders()
 
   // Start async export job — returns immediately with export_id
-  const startRes = await fetch(`${API_BASE}/api/sops/${id}/export?format=${format}`, {
+  const startRes = await fetch(`${API_BASE}/api/sops/${id}/export?format=${format}&template=${template}`, {
     method: 'POST',
     headers,
   })

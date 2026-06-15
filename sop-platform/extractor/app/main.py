@@ -47,6 +47,15 @@ app = FastAPI(
     version="0.2.0",
 )
 
+
+@app.on_event("startup")
+async def _prewarm_heavy_imports() -> None:
+    # scenedetect + opencv cold-start takes ~1s — pre-warm on startup so the
+    # first real extraction job doesn't pay that cost after scale-to-zero.
+    await asyncio.to_thread(lambda: __import__("scenedetect"))
+    logger.info("scenedetect pre-warmed")
+
+
 DATA_SUBDIRS = ["uploads", "frames", "exports", "templates"]
 
 
@@ -140,6 +149,7 @@ class ExtractResponse(BaseModel):
 class RenderDocRequest(BaseModel):
     sop_id: str
     format: str = "docx"          # 'docx' or 'pdf'
+    template: str = "standard"    # 'standard' | 'meeting_minutes' | 'webinar'
     azure_blob_base_url: str      # e.g. https://cnavinfsop.blob.core.windows.net/infsop
     azure_sas_token: str
     sop_data: dict                # Full SOP payload — see doc_renderer._build_context
@@ -294,6 +304,7 @@ async def render_doc(req: RenderDocRequest) -> RenderDocResponse:
             sop_data=req.sop_data,
             azure_blob_base_url=req.azure_blob_base_url,
             azure_sas_token=req.azure_sas_token,
+            template=req.template,
         )
     except FileNotFoundError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc

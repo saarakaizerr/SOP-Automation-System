@@ -39,6 +39,12 @@ ALTER TABLE public.pipeline_runs             ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.transcript_lines          ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.processed_sharepoint_files ENABLE ROW LEVEL SECURITY;
 
+-- Allow logged-in users to receive pipeline_runs Realtime events (notification bell)
+CREATE POLICY "authenticated users can read pipeline_runs"
+ON public.pipeline_runs FOR SELECT
+TO authenticated
+USING (true);
+
 -- Config & reference tables
 ALTER TABLE public.property_watchlist        ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.export_history            ENABLE ROW LEVEL SECURITY;

@@ -1,7 +1,7 @@
 import { createFileRoute, useParams } from '@tanstack/react-router'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useState, useCallback } from 'react'
-import { fetchSOP, sopKeys, setProjectCode } from '../api/client'
+import { useEffect, useState, useCallback, useRef } from 'react'
+import { fetchSOP, sopKeys, setProjectCode, createSection, updateSection, deleteSection } from '../api/client'
 import { useAuth } from '../hooks/useAuth'
 import type { SOPSection } from '../api/types'
 
@@ -167,13 +167,45 @@ function SectionCard({
   section,
   isOpen,
   onToggle,
+  canEdit,
+  onSaveTitle,
+  onSaveContent,
+  onDelete,
 }: {
   section: SOPSection
   isOpen: boolean
   onToggle: () => void
+  canEdit: boolean
+  onSaveTitle: (id: string, title: string) => Promise<void>
+  onSaveContent: (id: string, text: string) => Promise<void>
+  onDelete: (id: string) => void
 }) {
   const colors = SECTION_COLORS[section.section_key] ?? DEFAULT_COLOR
   const icon = SECTION_ICONS[section.section_key]
+  const [editingTitle, setEditingTitle] = useState(false)
+  const [titleInput, setTitleInput] = useState(section.section_title)
+  const [editingContent, setEditingContent] = useState(false)
+  const [contentInput, setContentInput] = useState(section.content_text ?? '')
+  const [saving, setSaving] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
+
+  useEffect(() => { setTitleInput(section.section_title) }, [section.section_title])
+  useEffect(() => { setContentInput(section.content_text ?? '') }, [section.content_text])
+
+  async function handleSaveTitle() {
+    if (!titleInput.trim() || titleInput === section.section_title) { setEditingTitle(false); return }
+    setSaving(true)
+    await onSaveTitle(section.id, titleInput.trim())
+    setSaving(false)
+    setEditingTitle(false)
+  }
+
+  async function handleSaveContent() {
+    setSaving(true)
+    await onSaveContent(section.id, contentInput)
+    setSaving(false)
+    setEditingContent(false)
+  }
 
   return (
     <div
@@ -181,50 +213,129 @@ function SectionCard({
       className={`rounded-xl border ${colors.border} overflow-hidden shadow-sm transition-shadow hover:shadow-md`}
     >
       {/* Header */}
-      <button
-        onClick={onToggle}
-        className={`w-full flex items-center justify-between px-5 py-3.5 ${colors.bg} hover:brightness-95 transition-all duration-150 group`}
-      >
-        <div className="flex items-center gap-2.5">
-          <span className={`${colors.icon} transition-transform duration-150 group-hover:scale-110`}>
-            {icon}
-          </span>
-          <span className="text-sm font-semibold text-secondary">{section.section_title}</span>
+      <div className={`flex items-center justify-between px-5 py-3.5 ${colors.bg} group`}>
+        {editingTitle ? (
+          <div className="flex items-center gap-2 flex-1 mr-2">
+            <input
+              value={titleInput}
+              onChange={e => setTitleInput(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter') handleSaveTitle()
+                if (e.key === 'Escape') { setTitleInput(section.section_title); setEditingTitle(false) }
+              }}
+              className="flex-1 text-sm font-semibold bg-transparent border-b border-default focus:outline-none focus:border-blue-400 text-secondary py-0.5"
+              autoFocus
+            />
+            <button onClick={handleSaveTitle} disabled={saving} className="text-xs px-2 py-0.5 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 transition-colors">
+              {saving ? '…' : 'Save'}
+            </button>
+            <button onClick={() => { setTitleInput(section.section_title); setEditingTitle(false) }} className="text-xs text-muted hover:text-secondary transition-colors">
+              Cancel
+            </button>
+          </div>
+        ) : (
+          <button onClick={onToggle} className="flex items-center gap-2.5 flex-1 min-w-0 text-left">
+            <span className={`${colors.icon} shrink-0 transition-transform duration-150 group-hover:scale-110`}>{icon}</span>
+            <span className="text-sm font-semibold text-secondary truncate">{section.section_title}</span>
+          </button>
+        )}
+        <div className="flex items-center gap-1 shrink-0 ml-2">
+          {canEdit && !editingTitle && (
+            <>
+              <button
+                onClick={e => { e.stopPropagation(); setTitleInput(section.section_title); setEditingTitle(true) }}
+                className="p-1 rounded text-muted hover:text-blue-500 hover:bg-blue-500/10 transition-all opacity-0 group-hover:opacity-100"
+                title="Rename"
+              >
+                <svg viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5">
+                  <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z"/>
+                </svg>
+              </button>
+              {confirmDelete ? (
+                <div className="flex items-center gap-1">
+                  <span className="text-[10px] text-red-500 font-medium">Delete?</span>
+                  <button onClick={() => onDelete(section.id)} className="text-[10px] px-1.5 py-0.5 bg-red-600 text-white rounded hover:bg-red-700 transition-colors">Yes</button>
+                  <button onClick={() => setConfirmDelete(false)} className="text-[10px] text-muted hover:text-secondary transition-colors">No</button>
+                </div>
+              ) : (
+                <button
+                  onClick={e => { e.stopPropagation(); setConfirmDelete(true) }}
+                  className="p-1 rounded text-muted hover:text-red-500 hover:bg-red-500/10 transition-all opacity-0 group-hover:opacity-100"
+                  title="Delete"
+                >
+                  <svg viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5">
+                    <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd"/>
+                  </svg>
+                </button>
+              )}
+            </>
+          )}
+          {!editingTitle && (
+            <button onClick={onToggle} className="p-1 ml-1">
+              <svg viewBox="0 0 20 20" fill="currentColor" className={`w-4 h-4 text-muted transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`}>
+                <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd"/>
+              </svg>
+            </button>
+          )}
         </div>
-        <div className="flex items-center gap-2">
-          <span className="text-[10px] text-muted opacity-0 group-hover:opacity-100 transition-opacity">
-            {isOpen ? 'collapse' : 'expand'}
-          </span>
-          <svg
-            viewBox="0 0 20 20" fill="currentColor"
-            className={`w-4 h-4 text-muted transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`}
-          >
-            <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd"/>
-          </svg>
-        </div>
-      </button>
+      </div>
 
       {/* Body — smooth height animation via grid trick */}
       <div className={`grid transition-all duration-300 ease-in-out ${isOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}>
         <div className="overflow-hidden">
           <div className="px-5 py-4 bg-card">
-            {section.content_type === 'text' && section.content_text && (
-              <p className="text-sm text-secondary leading-relaxed">{section.content_text}</p>
-            )}
-            {section.content_type === 'list' && Array.isArray(section.content_json) && (
-              <ul className="space-y-2">
-                {(section.content_json as string[]).map((item, i) => (
-                  <li key={i} className="flex items-start gap-2.5 text-sm text-secondary group/item">
-                    <span className={`shrink-0 mt-0.5 w-5 h-5 rounded-full ${colors.bg} ${colors.icon} flex items-center justify-center text-xs font-bold transition-transform duration-150 group-hover/item:scale-110`}>
-                      {i + 1}
-                    </span>
-                    {item}
-                  </li>
-                ))}
-              </ul>
-            )}
-            {section.content_type === 'table' && Array.isArray(section.content_json) && section.content_json.length > 0 && (
-              <StyledTable rows={section.content_json as Record<string, unknown>[]} />
+            {editingContent ? (
+              <div className="space-y-2">
+                <textarea
+                  value={contentInput}
+                  onChange={e => setContentInput(e.target.value)}
+                  rows={6}
+                  className="w-full text-sm text-secondary bg-input border border-default rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400/50 resize-y"
+                />
+                <div className="flex gap-2">
+                  <button onClick={handleSaveContent} disabled={saving} className="text-xs px-3 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors">
+                    {saving ? 'Saving…' : 'Save'}
+                  </button>
+                  <button onClick={() => { setContentInput(section.content_text ?? ''); setEditingContent(false) }} className="text-xs text-muted hover:text-secondary transition-colors">
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <>
+                {section.content_type === 'text' && section.content_text && (
+                  <p className="text-sm text-secondary leading-relaxed whitespace-pre-wrap">{section.content_text}</p>
+                )}
+                {section.content_type === 'list' && Array.isArray(section.content_json) && (
+                  <ul className="space-y-2">
+                    {(section.content_json as string[]).map((item, i) => (
+                      <li key={i} className="flex items-start gap-2.5 text-sm text-secondary group/item">
+                        <span className={`shrink-0 mt-0.5 w-5 h-5 rounded-full ${colors.bg} ${colors.icon} flex items-center justify-center text-xs font-bold transition-transform duration-150 group-hover/item:scale-110`}>
+                          {i + 1}
+                        </span>
+                        {item}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {section.content_type === 'table' && Array.isArray(section.content_json) && section.content_json.length > 0 && (
+                  <StyledTable rows={section.content_json as Record<string, unknown>[]} />
+                )}
+                {!section.content_text && !section.content_json && (
+                  <p className="text-sm text-muted italic">No content yet.</p>
+                )}
+                {canEdit && section.content_type !== 'table' && (
+                  <button
+                    onClick={() => setEditingContent(true)}
+                    className="mt-3 flex items-center gap-1.5 text-xs text-muted hover:text-blue-500 transition-colors"
+                  >
+                    <svg viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5">
+                      <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z"/>
+                    </svg>
+                    Edit content
+                  </button>
+                )}
+              </>
             )}
           </div>
         </div>
@@ -490,15 +601,59 @@ function SOPDetailsCard({ sop, canEdit }: { sop: any; canEdit: boolean }) {
 function OverviewPage() {
   const { id } = useParams({ from: '/sop/$id/overview' })
   const { appUser } = useAuth()
+  const queryClient = useQueryClient()
   const canEdit = appUser?.role === 'editor' || appUser?.role === 'admin'
-  // section open/close state — undefined means open by default
   const [closedSections, setClosedSections] = useState<Set<string>>(new Set())
   const [activeSection, setActiveSection] = useState<string | null>(null)
+  const [addingSection, setAddingSection] = useState(false)
+  const [newSectionTitle, setNewSectionTitle] = useState('')
+  const newSectionRef = useRef<HTMLInputElement>(null)
 
   const { data: sop } = useQuery({
     queryKey: sopKeys.detail(id),
     queryFn: () => fetchSOP(id),
   })
+
+  const updateMutation = useMutation({
+    mutationFn: ({ sectionId, data }: { sectionId: string; data: { section_title?: string; content_text?: string } }) =>
+      updateSection(sectionId, data),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: sopKeys.detail(id) }),
+  })
+
+  const deleteMutation = useMutation({
+    mutationFn: (sectionId: string) => deleteSection(sectionId),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: sopKeys.detail(id) }),
+  })
+
+  const createMutation = useMutation({
+    mutationFn: (title: string) => createSection(id, { section_title: title, content_type: 'text' }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: sopKeys.detail(id) })
+      setAddingSection(false)
+      setNewSectionTitle('')
+    },
+  })
+
+  async function handleSaveTitle(sectionId: string, title: string) {
+    await updateMutation.mutateAsync({ sectionId, data: { section_title: title } })
+  }
+
+  async function handleSaveContent(sectionId: string, text: string) {
+    await updateMutation.mutateAsync({ sectionId, data: { content_text: text } })
+  }
+
+  function handleDelete(sectionId: string) {
+    deleteMutation.mutate(sectionId)
+  }
+
+  function handleAddSection() {
+    if (!newSectionTitle.trim()) return
+    createMutation.mutate(newSectionTitle.trim())
+  }
+
+  useEffect(() => {
+    if (addingSection) newSectionRef.current?.focus()
+  }, [addingSection])
 
   // Scroll to hash section on load
   useEffect(() => {
@@ -601,8 +756,53 @@ function OverviewPage() {
                 section={section}
                 isOpen={isSectionOpen(section.id as unknown as string)}
                 onToggle={() => toggleSection(section.id as unknown as string)}
+                canEdit={canEdit}
+                onSaveTitle={handleSaveTitle}
+                onSaveContent={handleSaveContent}
+                onDelete={handleDelete}
               />
             ))}
+          </div>
+        )}
+
+        {/* Add section */}
+        {canEdit && (
+          <div className="pt-1">
+            {addingSection ? (
+              <div className="flex items-center gap-2 bg-card rounded-xl border border-subtle px-4 py-3 shadow-sm">
+                <input
+                  ref={newSectionRef}
+                  value={newSectionTitle}
+                  onChange={e => setNewSectionTitle(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') handleAddSection()
+                    if (e.key === 'Escape') { setAddingSection(false); setNewSectionTitle('') }
+                  }}
+                  placeholder="Section title…"
+                  className="flex-1 text-sm bg-input border border-default rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-400/50 text-secondary"
+                />
+                <button
+                  onClick={handleAddSection}
+                  disabled={!newSectionTitle.trim() || createMutation.isPending}
+                  className="text-xs px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                >
+                  {createMutation.isPending ? 'Adding…' : 'Add'}
+                </button>
+                <button onClick={() => { setAddingSection(false); setNewSectionTitle('') }} className="text-xs text-muted hover:text-secondary transition-colors">
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setAddingSection(true)}
+                className="flex items-center gap-2 text-xs text-muted hover:text-blue-500 transition-colors px-1"
+              >
+                <svg viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+                  <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd"/>
+                </svg>
+                Add section
+              </button>
+            )}
           </div>
         )}
       </div>

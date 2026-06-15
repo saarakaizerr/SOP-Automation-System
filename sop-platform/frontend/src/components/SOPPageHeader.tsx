@@ -1,7 +1,7 @@
-﻿import { useState } from 'react'
+﻿import { useState, useRef, useEffect } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { SOPDetail } from '../api/types'
-import { exportSOP, updateSOPStatus, fetchMetrics, toggleLike, sopKeys } from '../api/client'
+import { exportSOP, updateSOPStatus, fetchMetrics, toggleLike, sopKeys, type ExportTemplate } from '../api/client'
 import { useAuth } from '../hooks/useAuth'
 
 interface Props {
@@ -26,8 +26,11 @@ function formatDate(dateStr: string | null): string {
 export function SOPPageHeader({ sop }: Props) {
   const [toast, setToast] = useState<{ msg: string; type: 'ok' | 'err' } | null>(null)
   const [exporting, setExporting] = useState<'docx' | 'pdf' | null>(null)
+  const [exportingTemplate, setExportingTemplate] = useState<ExportTemplate | null>(null)
   const [statusOpen, setStatusOpen] = useState(false)
+  const [templateMenuOpen, setTemplateMenuOpen] = useState(false)
   const [pdfPreview, setPdfPreview] = useState<{ url: string; filename: string } | null>(null)
+  const templateMenuRef = useRef<HTMLDivElement>(null)
   const { appUser } = useAuth()
   const canChangeStatus = appUser?.role === 'editor' || appUser?.role === 'admin'
   const qc = useQueryClient()
@@ -58,9 +61,38 @@ export function SOPPageHeader({ sop }: Props) {
     if (duration > 0) setTimeout(() => setToast(null), duration)
   }
 
-  // Latest cached exports (PDF / DOCX) — from metrics which is already fetched above
-  const latestPdf  = metrics?.recent_exports?.find((e: { format: string; file_url: string | null }) => e.format === 'pdf'  && e.file_url)
-  const latestDocx = metrics?.recent_exports?.find((e: { format: string; file_url: string | null }) => e.format === 'docx' && e.file_url)
+  useEffect(() => {
+    function handleOutside(e: MouseEvent) {
+      if (templateMenuRef.current && !templateMenuRef.current.contains(e.target as Node)) {
+        setTemplateMenuOpen(false)
+      }
+    }
+    if (templateMenuOpen) document.addEventListener('mousedown', handleOutside)
+    return () => document.removeEventListener('mousedown', handleOutside)
+  }, [templateMenuOpen])
+
+  async function handleTemplateExport(template: ExportTemplate) {
+    setTemplateMenuOpen(false)
+    setExportingTemplate(template)
+    showToast('Generating document — this may take a minute…', 'ok', 0)
+    try {
+      const { download_url, filename } = await exportSOP(sop.id, 'pdf', template)
+      qc.invalidateQueries({ queryKey: sopKeys.metrics(sop.id) })
+      setPdfPreview({ url: download_url, filename })
+      setToast(null)
+    } catch {
+      showToast('Export failed — please try again', 'err')
+    } finally {
+      setExportingTemplate(null)
+    }
+  }
+
+  // Latest cached exports — from metrics which is already fetched above
+  type RecentExport = { format: string; file_url: string | null; created_at: string }
+  const latestPdf            = metrics?.recent_exports?.find((e: RecentExport) => e.format === 'pdf'  && e.file_url && !e.file_url.includes('/meeting_minutes_') && !e.file_url.includes('/webinar_'))
+  const latestDocx           = metrics?.recent_exports?.find((e: RecentExport) => e.format === 'docx' && e.file_url)
+  const latestMeetingMinutes = metrics?.recent_exports?.find((e: RecentExport) => e.format === 'pdf'  && e.file_url?.includes('/meeting_minutes_'))
+  const latestWebinar        = metrics?.recent_exports?.find((e: RecentExport) => e.format === 'pdf'  && e.file_url?.includes('/webinar_'))
 
   function openCachedPdf() {
     if (latestPdf?.file_url) setPdfPreview({ url: latestPdf.file_url, filename: `sop_${sop.id}.pdf` })
@@ -289,6 +321,69 @@ export function SOPPageHeader({ sop }: Props) {
                   <path fillRule="evenodd" d="M8 3a5 5 0 104.546 2.914.5.5 0 00-.908-.417A4 4 0 118 4v1.586l1.293-1.293a.5.5 0 01.707.707l-2 2a.5.5 0 01-.707 0l-2-2a.5.5 0 11.707-.707L7.5 5.586V4A5 5 0 008 3z" clipRule="evenodd"/>
                 </svg>
               </button>
+            )}
+          </div>
+
+          {/* Templates dropdown */}
+          <div className="relative" ref={templateMenuRef}>
+            <button
+              onClick={() => setTemplateMenuOpen(v => !v)}
+              disabled={exportingTemplate !== null}
+              title="Export as a different template"
+              className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium border border-violet-500/30 rounded-md text-violet-500 bg-violet-500/5 hover:bg-violet-500/15 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+            >
+              {exportingTemplate ? (
+                <svg className="animate-spin w-3 h-3" viewBox="0 0 24 24" fill="none">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+                </svg>
+              ) : (
+                <svg viewBox="0 0 16 16" fill="currentColor" className="w-3 h-3">
+                  <path d="M2 2a1 1 0 011-1h10a1 1 0 011 1v2a1 1 0 01-1 1H3a1 1 0 01-1-1V2zm0 5a1 1 0 011-1h6a1 1 0 010 2H3a1 1 0 01-1-1zm0 4a1 1 0 011-1h4a1 1 0 010 2H3a1 1 0 01-1-1z"/>
+                </svg>
+              )}
+              {exportingTemplate ? 'Generating…' : 'Templates'}
+              <svg viewBox="0 0 16 16" fill="currentColor" className="w-2.5 h-2.5 opacity-60">
+                <path fillRule="evenodd" d="M8 10.293l-4.646-4.647a.5.5 0 01.708-.708L8 8.879l3.938-3.941a.5.5 0 11.708.707L8 10.293z" clipRule="evenodd"/>
+              </svg>
+            </button>
+            {templateMenuOpen && (
+              <div className="absolute right-0 top-full mt-1 w-52 bg-card border border-default rounded-lg shadow-lg z-50 overflow-hidden">
+                <div className="px-3 py-2 text-[10px] font-semibold text-muted uppercase tracking-wider border-b border-default">
+                  Export as PDF
+                </div>
+                {([
+                  { key: 'meeting_minutes' as ExportTemplate, label: 'Meeting Minutes', color: 'text-blue-500', dot: 'bg-blue-500', cached: latestMeetingMinutes },
+                  { key: 'webinar'         as ExportTemplate, label: 'Webinar Summary', color: 'text-teal-600', dot: 'bg-teal-500', cached: latestWebinar        },
+                ]).map(opt => (
+                  <div key={opt.key} className="flex items-center hover:bg-raised transition-colors">
+                    <button
+                      onClick={() => opt.cached
+                        ? setPdfPreview({ url: opt.cached.file_url!, filename: `${opt.key}_${sop.id}.pdf` })
+                        : handleTemplateExport(opt.key)
+                      }
+                      className="flex-1 flex items-center gap-2.5 px-3 py-2.5 text-xs text-default text-left"
+                    >
+                      <span className={`w-2 h-2 rounded-full shrink-0 ${opt.dot}`} />
+                      <span className={`font-medium ${opt.color}`}>{opt.label}</span>
+                      {opt.cached && (
+                        <span className="ml-auto text-[10px] text-muted">{timeAgo(opt.cached.created_at)}</span>
+                      )}
+                    </button>
+                    {opt.cached && (
+                      <button
+                        onClick={() => handleTemplateExport(opt.key)}
+                        title="Regenerate"
+                        className="px-2.5 py-2.5 text-muted opacity-50 hover:opacity-100 border-l border-default"
+                      >
+                        <svg viewBox="0 0 16 16" fill="currentColor" className="w-3 h-3">
+                          <path fillRule="evenodd" d="M8 3a5 5 0 104.546 2.914.5.5 0 00-.908-.417A4 4 0 118 4v1.586l1.293-1.293a.5.5 0 01.707.707l-2 2a.5.5 0 01-.707 0l-2-2a.5.5 0 11.707-.707L7.5 5.586V4A5 5 0 008 3z" clipRule="evenodd"/>
+                        </svg>
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
             )}
           </div>
 
