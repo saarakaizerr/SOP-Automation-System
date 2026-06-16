@@ -31,11 +31,12 @@ BORDER   = RGBColor(0xD1, 0xD5, 0xDB)   # table border
 
 TEMPLATE_PATH = Path("/data/templates/sop_template.docx")
 _VERSION_PATH = TEMPLATE_PATH.with_suffix(".version")
-_TEMPLATE_VERSION = "26"  # increment when template structure changes
+_TEMPLATE_VERSION = "27"  # increment when template structure changes
 
 _ASSETS_DIR = Path(__file__).parent / "assets"
 _HEADER_IMG = _ASSETS_DIR / "header1.jpg"
 _FOOTER_IMG = _ASSETS_DIR / "footer.jpg"
+_CN_LOGO    = _ASSETS_DIR / "cloudnavision_logo.jpg"
 
 
 def _set_run_font(run, size_pt: float, bold=False, italic=False, color=None):
@@ -218,24 +219,11 @@ def _add_corner_shape(para) -> None:
     by both renderers, causing the image to appear at body content level instead
     of the header area.
     """
-    try:
-        import io
-        from PIL import Image, ImageDraw
-        W, H = 90, 88
-        img = Image.new("RGB", (W, H), (255, 255, 255))
-        draw = ImageDraw.Draw(img)
-        draw.rounded_rectangle([(0, 0), (W, H)], radius=14, fill=(6, 182, 212))
-        buf = io.BytesIO()
-        img.save(buf, "PNG")
-        buf.seek(0)
+    logo = _CN_LOGO if _CN_LOGO.exists() else (_HEADER_IMG if _HEADER_IMG.exists() else None)
+    if logo:
         para.alignment = WD_ALIGN_PARAGRAPH.RIGHT
         r = para.add_run()
-        r.add_picture(buf, height=Cm(2))
-    except Exception:
-        if _HEADER_IMG.exists():
-            para.alignment = WD_ALIGN_PARAGRAPH.RIGHT
-            r = para.add_run()
-            r.add_picture(str(_HEADER_IMG), height=Cm(2))
+        r.add_picture(str(logo), height=Cm(2))
 
 
 def _build_header(section) -> None:
