@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Database Schema</title>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <style>
+    body { font-family: sans-serif; background: #fff; padding: 40px; }
+    h1 { font-size: 20px; color: #333; margin-bottom: 24px; }
+    .mermaid { max-width: 1100px; margin: 0 auto; }
+  </style>
+</head>
+<body>
+  <h1>Database Schema (ER Diagram)</h1>
+  <div class="mermaid">
+erDiagram
+    users {
+        uuid id PK
+        string email
+        string name
+        string role
+    }
+    sops {
+        uuid id PK
+        string title
+        string status
+        string video_url
+        jsonb screen_share_periods
+        uuid created_by FK
+        bool is_merged
+        string project_code
+    }
+    sop_steps {
+        uuid id PK
+        uuid sop_id FK
+        int sequence
+        string title
+        text description
+        string screenshot_url
+        string annotated_screenshot_url
+        float timestamp_start
+        bool is_approved
+    }
+    step_callouts {
+        uuid id PK
+        uuid step_id FK
+        int callout_number
+        string label
+        float target_x
+        float target_y
+        string confidence
+        bool was_repositioned
+    }
+    step_clips {
+        uuid id PK
+        uuid step_id FK
+        string clip_url
+        float duration_sec
+    }
+    sop_sections {
+        uuid id PK
+        uuid sop_id FK
+        string section_key
+        string content_type
+        text content_text
+    }
+    pipeline_runs {
+        uuid id PK
+        uuid sop_id FK
+        string status
+        int gemini_input_tokens
+        float total_api_cost
+    }
+    transcript_lines {
+        uuid id PK
+        uuid sop_id FK
+        string speaker
+        float timestamp_sec
+        text content
+    }
+    sop_merge_sessions {
+        uuid id PK
+        uuid base_sop_id FK
+        uuid updated_sop_id FK
+        string status
+    }
+    users ||--o{ sops : creates
+    sops ||--o{ sop_steps : has
+    sops ||--o{ sop_sections : has
+    sops ||--o{ pipeline_runs : tracked_by
+    sops ||--o{ transcript_lines : has
+    sops ||--o{ sop_merge_sessions : base_of
+    sop_steps ||--o{ step_callouts : annotated_with
+    sop_steps ||--o{ step_clips : has
+  </div>
+  <script>mermaid.initialize({ startOnLoad: true, theme: 'default' });</script>
+</body>
+</html>

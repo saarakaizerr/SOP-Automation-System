@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Pipeline Flow</title>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <style>
+    body { font-family: sans-serif; background: #fff; padding: 40px; }
+    h1 { font-size: 20px; color: #333; margin-bottom: 24px; }
+    .mermaid { max-width: 900px; margin: 0 auto; }
+  </style>
+</head>
+<body>
+  <h1>Pipeline Flow — WF0 to WF5</h1>
+  <div class="mermaid">
+flowchart TD
+    SP(["SharePoint\nNew video upload"])
+    subgraph WF0["WF0 — Smart Ingest & Auto-Split"]
+        W0A["Generate SOP UUID\nProbe video duration"]
+        W0B{"Video > 30 min?"}
+        W0C["FFmpeg stream-copy split\nat nearest keyframe"]
+        W0D["Upload to Azure Blob"]
+    end
+    subgraph WF1["WF1 — Ingestion & Transcription"]
+        W1A["Gemini File API\nFull audio transcription"]
+        W1B["Gemini Vision\nDetect screen-share periods\n+ crop bounding boxes"]
+        W1C["Create sops record\nStore transcript_lines"]
+    end
+    subgraph WF2["WF2b — Frame Extraction"]
+        W2A["FFmpeg crop + trim\nto screen-share window"]
+        W2B["PySceneDetect\nAdaptiveDetector threshold=3.0"]
+        W2C["Extract PNG at T+1.5s\nper scene boundary"]
+        W2D["imagehash dedup\nHamming distance <= 8"]
+        W2E["Upload frames to Azure\nWrite sop_steps to DB"]
+    end
+    subgraph WF3["WF3c — AI Annotation Generation"]
+        W3A["Gemini Vision OCR\nper screenshot"]
+        W3B["Match text to UI elements\nocr_exact / ocr_fuzzy / gemini_only"]
+        W3C["Store step_callouts\npixel coordinates + labels"]
+    end
+    subgraph WF4["WF4 — Extract Video Clips"]
+        W4A["FFmpeg stream-copy\nper step window"]
+        W4B["Upload MP4 clips\nCreate step_clips records"]
+    end
+    subgraph WF5["WF5b — Generate Step Content"]
+        W5A["Gemini: step titles\ndescriptions + sub-steps"]
+        W5B["Gemini: full compliance overview\nPurpose · Risks · Matrices"]
+        W5C["Create sop_sections\nMark pipeline completed"]
+    end
+    DONE(["SOP Draft Ready in Web UI"])
+    SP --> WF0
+    W0A --> W0B
+    W0B -->|Yes| W0C --> W0D
+    W0B -->|No| W0D
+    W0D --> WF1
+    W1A --> W1B --> W1C --> WF2
+    W2A --> W2B --> W2C --> W2D --> W2E --> WF3
+    W3A --> W3B --> W3C --> WF4
+    W4A --> W4B --> WF5
+    W5A --> W5B --> W5C --> DONE
+    style WF0 fill:#e8f4fd,stroke:#2196f3
+    style WF1 fill:#e8fde8,stroke:#4caf50
+    style WF2 fill:#fdf3e8,stroke:#ff9800
+    style WF3 fill:#fde8f4,stroke:#e91e8c
+    style WF4 fill:#f4e8fd,stroke:#9c27b0
+    style WF5 fill:#e8fdfd,stroke:#009688
+  </div>
+  <script>mermaid.initialize({ startOnLoad: true, theme: 'default' });</script>
+</body>
+</html>

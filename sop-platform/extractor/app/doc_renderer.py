@@ -588,20 +588,9 @@ def _generate_cover_page(
     tmp_dir: Path,
     today: str,
 ) -> Optional[InlineImage]:
-    """
-    Use the static cover template as-is, resized to A4 (2480×3508 px at 300 DPI).
-    The image fills the full page — section1 has zero margins.
-    """
+    """Generate CloudNavision-branded cover at full A4 300 DPI (2480×3508 px)."""
     try:
-        from PIL import Image
-
-        if _COVER_TEMPLATE.exists():
-            img = Image.open(str(_COVER_TEMPLATE)).convert("RGB")
-        else:
-            logger.warning("Cover template not found at %s — using generated fallback", _COVER_TEMPLATE)
-            img = _build_cover_base()
-
-        img = img.resize((2480, 3508), Image.LANCZOS)
+        img = _build_cover_base()
 
         cover_path = tmp_dir / "cover_page.jpg"
         img.save(str(cover_path), "JPEG", quality=95, optimize=True)
@@ -613,61 +602,119 @@ def _generate_cover_page(
 
 
 def _build_cover_base() -> "Image.Image":
-    """Build the Infomate cover template with Pillow (used when cover_template.jpg is absent)."""
+    """Build CloudNavision-branded SOP cover at A4 300 DPI (2480×3508)."""
     from PIL import Image, ImageDraw, ImageFont
 
-    W, H = 1260, 1944
-    WHITE  = (255, 255, 255)
-    ORANGE = (232, 92, 26)
-    SHADOW = (68, 64, 108)
-    TEXT_DIM = (215, 213, 235)
-    TEXT_MID = (175, 172, 205)
+    W, H = 2480, 3508
 
-    split_x   = int(W * 0.38)
-    panel_top = 120
-    panel_bot = int(H * 0.71)
+    # CloudNavision brand palette
+    NAVY       = (10, 22, 40)
+    NAVY_MID   = (15, 32, 58)
+    TEAL       = (6, 182, 212)
+    TEAL_DIM   = (4, 120, 140)
+    WHITE      = (255, 255, 255)
+    LIGHT      = (180, 210, 230)
+    MUTED      = (90, 130, 160)
+    PANEL_BG   = (18, 40, 70)
 
-    img  = Image.new("RGB", (W, H), WHITE)
+    img  = Image.new("RGB", (W, H), NAVY)
     draw = ImageDraw.Draw(img)
 
+    # Subtle vertical gradient
     for y in range(H):
         t = y / H
-        draw.line([(0, y), (W, y)], fill=(int(118 - t * 32), int(120 - t * 36), int(166 - t * 26)))
+        r = int(NAVY[0] + t * (NAVY_MID[0] - NAVY[0]))
+        g = int(NAVY[1] + t * (NAVY_MID[1] - NAVY[1]))
+        b = int(NAVY[2] + t * (NAVY_MID[2] - NAVY[2]))
+        draw.line([(0, y), (W, y)], fill=(r, g, b))
 
-    draw.rectangle([(9, panel_top + 10), (split_x + 9, panel_bot + 10)], fill=SHADOW)
+    # Left teal accent bar
+    draw.rectangle([(0, 0), (28, H)], fill=TEAL)
 
-    dec = 132
-    draw.rounded_rectangle(
-        [(split_x - dec // 2, panel_top - dec // 2), (split_x + dec // 2, panel_top + dec // 2)],
-        radius=30, fill=ORANGE,
-    )
-    draw.rectangle([(0, panel_top), (split_x, panel_bot)], fill=WHITE)
+    # Top header band
+    hdr_h = int(H * 0.14)
+    draw.rectangle([(28, 0), (W, hdr_h)], fill=PANEL_BG)
 
+    # Teal bottom border on header band
+    draw.rectangle([(28, hdr_h - 8), (W, hdr_h)], fill=TEAL)
+
+    # Bottom footer band
+    ftr_y = int(H * 0.87)
+    draw.rectangle([(28, ftr_y), (W, H)], fill=PANEL_BG)
+    draw.rectangle([(28, ftr_y), (W, ftr_y + 8)], fill=TEAL)
+
+    # Load fonts
     try:
-        fnt_tiny  = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",      24)
-        fnt_small = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",      28)
-        fnt_logo  = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 40)
+        reg  = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
+        bold = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
+        fnt_brand   = ImageFont.truetype(bold, 200)
+        fnt_tagline = ImageFont.truetype(reg,  80)
+        fnt_label   = ImageFont.truetype(bold, 68)
+        fnt_meta    = ImageFont.truetype(reg,  60)
+        fnt_small   = ImageFont.truetype(reg,  52)
     except Exception:
-        fnt_tiny = fnt_small = fnt_logo = ImageFont.load_default()
+        fnt_brand = fnt_tagline = fnt_label = fnt_meta = fnt_small = ImageFont.load_default()
 
     def _bb(text, font):
         bb = draw.textbbox((0, 0), text, font=font)
         return bb[2] - bb[0], bb[3] - bb[1]
 
-    right_pad = split_x + 40
-    jk_text = "A John Keells Company"
-    jk_w, _ = _bb(jk_text, fnt_small)
-    draw.text((W - jk_w - 30, 22), jk_text, font=fnt_small, fill=TEXT_DIM)
-    draw.line([(right_pad, 72), (W - 20, 72)], fill=TEXT_MID, width=1)
-    draw.line([(right_pad, H - 78), (W - 20, H - 78)], fill=TEXT_MID, width=1)
-    copy_text = "2018 Infomate Private Limited"
-    copy_w, _ = _bb(copy_text, fnt_tiny)
-    draw.text((W - copy_w - 30, H - 60), copy_text, font=fnt_tiny, fill=TEXT_DIM)
-    draw.rectangle([(W - 85, H - 48), (W, H)], fill=WHITE)
+    pad_l = 120
 
-    logo_y = panel_bot - 118
-    draw.rounded_rectangle([(42, logo_y), (90, logo_y + 48)], radius=11, fill=ORANGE)
-    draw.text((106, logo_y + 4), "infomate", font=fnt_logo, fill=(65, 65, 75))
+    # Brand name in header band
+    brand_y = int(hdr_h * 0.22)
+    draw.text((pad_l, brand_y), "CloudNavision", font=fnt_brand, fill=WHITE)
+    brand_w, brand_h = _bb("CloudNavision", fnt_brand)
+
+    # Tagline below brand
+    tag_y = brand_y + brand_h + 36
+    draw.text((pad_l, tag_y), "Intelligent Process Documentation", font=fnt_tagline, fill=LIGHT)
+
+    # Circuit-node decorative row (centre of page)
+    node_y = int(H * 0.50)
+    node_count = 7
+    node_spacing = 180
+    nodes_total = node_count * node_spacing
+    node_x0 = (W - nodes_total) // 2
+    for i in range(node_count):
+        cx = node_x0 + i * node_spacing
+        r  = 18 if i in (0, 3, 6) else 10
+        color = TEAL if i in (0, 3, 6) else TEAL_DIM
+        draw.ellipse([(cx - r, node_y - r), (cx + r, node_y + r)], fill=color)
+        if i < node_count - 1:
+            draw.rectangle([(cx + r + 4, node_y - 2), (cx + node_spacing - r - 4, node_y + 2)], fill=TEAL_DIM)
+
+    # "STANDARD OPERATING PROCEDURE" label block
+    block_y = int(H * 0.36)
+    block_h = int(H * 0.12)
+    draw.rounded_rectangle([(pad_l, block_y), (W - pad_l, block_y + block_h)], radius=20, fill=PANEL_BG)
+    draw.rounded_rectangle([(pad_l, block_y), (W - pad_l, block_y + block_h)], radius=20, outline=TEAL_DIM, width=3)
+
+    sop_text = "STANDARD OPERATING PROCEDURE"
+    sop_w, sop_h = _bb(sop_text, fnt_label)
+    draw.text(((W - sop_w) // 2, block_y + (block_h - sop_h) // 2), sop_text, font=fnt_label, fill=TEAL)
+
+    # Meta info area (below circuit nodes)
+    meta_y = int(H * 0.56)
+    meta_items = [
+        ("Document No.",  "Auto-generated"),
+        ("Version",       "1.0"),
+        ("Status",        "Draft"),
+    ]
+    col_w = (W - pad_l * 2) // len(meta_items)
+    for i, (label, val) in enumerate(meta_items):
+        x = pad_l + i * col_w
+        draw.text((x, meta_y), label, font=fnt_small, fill=MUTED)
+        draw.text((x, meta_y + 70), val,   font=fnt_meta,  fill=LIGHT)
+        if i > 0:
+            draw.rectangle([(x - 20, meta_y - 10), (x - 18, meta_y + 140)], fill=TEAL_DIM)
+
+    # Footer band content
+    ftr_pad_y = ftr_y + 50
+    draw.text((pad_l, ftr_pad_y), "cloudnavision.com", font=fnt_meta, fill=TEAL)
+    copy_text = "© CloudNavision Private Limited. All rights reserved."
+    copy_w, _ = _bb(copy_text, fnt_small)
+    draw.text((W - copy_w - pad_l, ftr_pad_y + 10), copy_text, font=fnt_small, fill=MUTED)
 
     return img
 

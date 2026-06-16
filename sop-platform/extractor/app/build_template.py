@@ -31,7 +31,7 @@ BORDER   = RGBColor(0xD1, 0xD5, 0xDB)   # table border
 
 TEMPLATE_PATH = Path("/data/templates/sop_template.docx")
 _VERSION_PATH = TEMPLATE_PATH.with_suffix(".version")
-_TEMPLATE_VERSION = "22"  # increment when template structure changes
+_TEMPLATE_VERSION = "26"  # increment when template structure changes
 
 _ASSETS_DIR = Path(__file__).parent / "assets"
 _HEADER_IMG = _ASSETS_DIR / "header1.jpg"
@@ -177,7 +177,7 @@ def _build_footer(section) -> None:
     # URL line + right-aligned page number
     p_url = footer.add_paragraph()
     _set_para_spacing(p_url, before_pt=2, after_pt=0)
-    r_url = p_url.add_run("https://www.infomateworld.com/")
+    r_url = p_url.add_run("https://cloudnavision.com/")
     _set_run_font(r_url, 8, color=RGBColor(0x00, 0x00, 0xCC))
     pPr_url = p_url._p.get_or_add_pPr()
     tabs_url = OxmlElement("w:tabs")
@@ -192,10 +192,10 @@ def _build_footer(section) -> None:
     _set_run_font(r_pgnum, 8, color=DARK)
     _add_page_number_to_run(r_pgnum)
 
-    # Address line + right-aligned Infomate logo image
+    # Address line + right-aligned CloudNavision brand text
     p_addr = footer.add_paragraph()
     _set_para_spacing(p_addr, before_pt=0, after_pt=0)
-    r_addr = p_addr.add_run("No 04, Leyden Bastian Street, Colombo 01, Sri Lanka")
+    r_addr = p_addr.add_run("CloudNavision Private Limited")
     _set_run_font(r_addr, 8, color=DARK)
     pPr_addr = p_addr._p.get_or_add_pPr()
     tabs_addr = OxmlElement("w:tabs")
@@ -206,14 +206,8 @@ def _build_footer(section) -> None:
     pPr_addr.append(tabs_addr)
     r_tab_addr = p_addr.add_run("\t")
     _set_run_font(r_tab_addr, 8)
-    if _FOOTER_IMG.exists():
-        r_logo = p_addr.add_run()
-        r_logo.add_picture(str(_FOOTER_IMG), height=Inches(0.22))
-    else:
-        r_icon = p_addr.add_run("■")
-        _set_run_font(r_icon, 9, bold=True, color=ORANGE)
-        r_brand = p_addr.add_run("infomate")
-        _set_run_font(r_brand, 8, bold=True, color=DARK)
+    r_brand = p_addr.add_run("CloudNavision")
+    _set_run_font(r_brand, 8, bold=True, color=RGBColor(0x06, 0xB6, 0xD4))
 
 
 def _add_corner_shape(para) -> None:
@@ -224,15 +218,28 @@ def _add_corner_shape(para) -> None:
     by both renderers, causing the image to appear at body content level instead
     of the header area.
     """
-    if not _HEADER_IMG.exists():
-        return
-    para.alignment = WD_ALIGN_PARAGRAPH.RIGHT
-    r = para.add_run()
-    r.add_picture(str(_HEADER_IMG), height=Cm(2))
+    try:
+        import io
+        from PIL import Image, ImageDraw
+        W, H = 90, 88
+        img = Image.new("RGB", (W, H), (255, 255, 255))
+        draw = ImageDraw.Draw(img)
+        draw.rounded_rectangle([(0, 0), (W, H)], radius=14, fill=(6, 182, 212))
+        buf = io.BytesIO()
+        img.save(buf, "PNG")
+        buf.seek(0)
+        para.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+        r = para.add_run()
+        r.add_picture(buf, height=Cm(2))
+    except Exception:
+        if _HEADER_IMG.exists():
+            para.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+            r = para.add_run()
+            r.add_picture(str(_HEADER_IMG), height=Cm(2))
 
 
 def _build_header(section) -> None:
-    """Add Infomate-style header with floating orange corner shape."""
+    """Add CloudNavision-branded header with teal corner shape."""
     header = section.header
     header.is_linked_to_previous = False
 
@@ -251,12 +258,12 @@ def _build_header(section) -> None:
     clear_shd.set(qn("w:fill"), "auto")
     pPr_hdr.append(clear_shd)
 
-    # Floating orange rounded rectangle pinned to page top-right corner
+    # Teal rounded rectangle pinned to page top-right corner
     _add_corner_shape(p_hdr)
     r_space = p_hdr.add_run(" ")
     _set_run_font(r_space, 1)
 
-    # Thin horizontal separator line below header area
+    # Thin teal separator line below header area
     p_line = header.add_paragraph()
     _set_para_spacing(p_line, before_pt=0, after_pt=0)
     pPr_line = p_line._p.get_or_add_pPr()
@@ -265,7 +272,7 @@ def _build_header(section) -> None:
     bottom_b.set(qn("w:val"), "single")
     bottom_b.set(qn("w:sz"), "6")
     bottom_b.set(qn("w:space"), "1")
-    bottom_b.set(qn("w:color"), "AAAAAA")
+    bottom_b.set(qn("w:color"), "06B6D4")
     pBdr.append(bottom_b)
     pPr_line.append(pBdr)
     r_line = p_line.add_run(" ")

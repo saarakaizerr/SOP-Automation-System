@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>System Architecture</title>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <style>
+    body { font-family: sans-serif; background: #fff; padding: 40px; }
+    h1 { font-size: 20px; color: #333; margin-bottom: 24px; }
+    .mermaid { max-width: 900px; margin: 0 auto; }
+  </style>
+</head>
+<body>
+  <h1>System Architecture</h1>
+  <div class="mermaid">
+graph TB
+    subgraph Browser["Client Browser"]
+        FE["sop-frontend\nReact + Vite · :5173"]
+    end
+    subgraph Docker["Docker Services"]
+        API["sop-api\nFastAPI · :8000\nREST + Auth + Proxy"]
+        EXT["sop-extractor\nFastAPI · :8001\nFFmpeg · PySceneDetect · Pillow · LibreOffice"]
+        TUN["sop-tunnel\nCloudflare Tunnel"]
+    end
+    subgraph External["External Services"]
+        DB[("Supabase\nPostgreSQL")]
+        BLOB["Azure Blob\nStorage"]
+        N8N["n8n\nWorkflow Orchestration"]
+        GEM["Google Gemini\n2.5 Flash"]
+    end
+    FE <-->|REST / React Query| API
+    TUN -->|soptest.cloudnavision.com| API
+    API <-->|SQLAlchemy async| DB
+    API <-->|HTTP proxy jobs| EXT
+    EXT -->|Upload frames / clips / exports| BLOB
+    EXT <-->|Vision OCR / Content gen| GEM
+    N8N -->|Webhook calls + x-internal-key| API
+    FE -->|Direct media URLs| BLOB
+    style Docker fill:#f0f4ff,stroke:#4f6ef7
+    style External fill:#fff8f0,stroke:#f7974f
+    style Browser fill:#f0fff4,stroke:#4faf7f
+  </div>
+  <script>mermaid.initialize({ startOnLoad: true, theme: 'default' });</script>
+</body>
+</html>

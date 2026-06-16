@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Frontend Navigation</title>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <style>
+    body { font-family: sans-serif; background: #fff; padding: 40px; }
+    h1 { font-size: 20px; color: #333; margin-bottom: 24px; }
+    .mermaid { max-width: 900px; margin: 0 auto; }
+  </style>
+</head>
+<body>
+  <h1>Frontend Navigation</h1>
+  <div class="mermaid">
+flowchart TD
+    LOGIN["Login\nSupabase Auth"]
+    DASH["Dashboard\n/dashboard\nSOP grid · search · filter"]
+    LOGIN --> DASH
+    DASH --> SOP["SOP Detail\n/sop/:id"]
+    subgraph TABS["Tab Navigation"]
+        PROC["Procedure\nThree-pane editor"]
+        OVR["Overview\nCompliance sections"]
+        PM["Process Map\nFlowchart builder"]
+        EXP["Export\nDOCX / PDF"]
+        HIST["History\nVersion timeline"]
+        METR["Metrics\nAdmin only"]
+    end
+    SOP --> TABS
+    PROC --> ANN["Annotation Editor Modal\nKonva.js canvas\nDrag · rotate · add callouts"]
+    ANN -->|POST /steps/:id/render-annotated| RE["Server re-renders PNG\nvia Pillow"]
+    EXP -->|POST /export 202| ASYNC["Async export job\nDocxtpl + LibreOffice PDF"]
+    ASYNC -->|GET /exports/:id poll| DL["Download link ready"]
+    DASH --> MERGE["Merge UI\n/merge"]
+    DASH --> SETTINGS["Settings\n/settings"]
+    style TABS fill:#f5f5ff,stroke:#7c7cff
+    style ANN fill:#fff5e6,stroke:#ff9800
+    style ASYNC fill:#e6ffe6,stroke:#4caf50
+  </div>
+  <script>mermaid.initialize({ startOnLoad: true, theme: 'default' });</script>
+</body>
+</html>
