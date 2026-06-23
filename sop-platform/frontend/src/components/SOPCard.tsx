@@ -3,7 +3,7 @@ import { useNavigate } from '@tanstack/react-router'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import clsx from 'clsx'
 import type { SOPListItem, SOPStatus, SOPTag } from '../api/types'
-import { deleteSOP, updateSOPTags, startPipeline, sopKeys } from '../api/client'
+import { deleteSOP, updateSOPTags, startPipeline, pausePipeline, resumePipeline, sopKeys } from '../api/client'
 import { useAuthContext } from '../contexts/AuthContext'
 
 interface Props { sop: SOPListItem }
@@ -191,16 +191,17 @@ export function SOPCard({ sop }: Props) {
   const canEdit = appUser?.role === 'editor' || appUser?.role === 'admin'
   const tags: SOPTag[] = sop.tags || []
 
-  const isPipelineRunning = sop.pipeline_status
-    && sop.pipeline_status !== 'completed'
-    && sop.pipeline_status !== 'failed'
-    && sop.pipeline_status !== 'awaiting_approval'
+  const TERMINAL_STATUSES = ['completed', 'failed', 'awaiting_approval', 'paused']
+  const isPipelineRunning = Boolean(sop.pipeline_status && !TERMINAL_STATUSES.includes(sop.pipeline_status))
+  const isPaused = sop.pipeline_status === 'paused'
 
-  const pipelineIdx = PIPELINE_STAGES.indexOf(sop.pipeline_status ?? '')
+  // When paused, pipeline_stage holds the pre-pause status for display + % calculation
+  const displayStatus = isPaused ? (sop.pipeline_stage ?? '') : (sop.pipeline_status ?? '')
+  const pipelineIdx = PIPELINE_STAGES.indexOf(displayStatus)
   const pipelinePct = pipelineIdx < 0 ? 5 : Math.round(((pipelineIdx + 1) / PIPELINE_STAGES.length) * 100)
   const ringCirc = 2 * Math.PI * 21
   const ringOffset = ringCirc * (1 - pipelinePct / 100)
-  const stageLabel = STAGE_LABELS[sop.pipeline_status ?? ''] ?? (sop.pipeline_status ?? '').replace(/_/g, ' ')
+  const stageLabel = STAGE_LABELS[displayStatus] ?? displayStatus.replace(/_/g, ' ')
 
   const [elapsed, setElapsed] = useState(0)
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -212,7 +213,7 @@ export function SOPCard({ sop }: Props) {
   useEffect(() => {
     if (!isPipelineRunning) {
       if (tickRef.current) { clearInterval(tickRef.current); tickRef.current = null }
-      sessionStorage.removeItem(storageKey)
+      if (!isPaused) sessionStorage.removeItem(storageKey) // keep stored time while paused
       return
     }
 
@@ -238,7 +239,7 @@ export function SOPCard({ sop }: Props) {
       setElapsed(Math.floor((Date.now() - wfStartRef.current) / 1000))
     }, 1000)
     return () => { if (tickRef.current) { clearInterval(tickRef.current); tickRef.current = null } }
-  }, [isPipelineRunning, currentWorkflow, storageKey])
+  }, [isPipelineRunning, isPaused, currentWorkflow, storageKey])
 
   const cleanTitle = sop.title.replace(/\b\d{8}\s+\d{6}\b/g, '').replace(/\s{2,}/g, ' ').trim()
   const displayName = sop.process_name || cleanTitle
@@ -253,6 +254,14 @@ export function SOPCard({ sop }: Props) {
   })
   const startMutation = useMutation({
     mutationFn: () => startPipeline(sop.id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: sopKeys.all }),
+  })
+  const pauseMutation = useMutation({
+    mutationFn: () => pausePipeline(sop.id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: sopKeys.all }),
+  })
+  const resumeMutation = useMutation({
+    mutationFn: () => resumePipeline(sop.id),
     onSuccess: () => qc.invalidateQueries({ queryKey: sopKeys.all }),
   })
 
@@ -293,11 +302,11 @@ export function SOPCard({ sop }: Props) {
         cfg.borderLeft, cfg.hoverBorder, cfg.hoverShadow,
       )}
     >
-      {/* ── Pipeline progress strip (top edge, visible for processing SOPs) ── */}
-      {isPipelineRunning && (
-        <div className="h-0.5 w-full bg-violet-500/15 shrink-0">
+      {/* ── Pipeline progress strip (top edge, visible for processing/paused SOPs) ── */}
+      {(isPipelineRunning || isPaused) && (
+        <div className={clsx('h-0.5 w-full shrink-0', isPaused ? 'bg-amber-500/15' : 'bg-violet-500/15')}>
           <div
-            className={clsx('h-full bg-gradient-to-r transition-all duration-700 ease-out', cfg.progressBar)}
+            className={clsx('h-full bg-gradient-to-r transition-all duration-700 ease-out', isPaused ? 'from-amber-400 to-orange-400' : cfg.progressBar)}
             style={{ width: `${pipelinePct}%` }}
           />
         </div>
@@ -309,17 +318,17 @@ export function SOPCard({ sop }: Props) {
         cfg.heroBg,
       )}>
         {/* Avatar / pipeline ring */}
-        {isPipelineRunning ? (
+        {(isPipelineRunning || isPaused) ? (
           <div className="shrink-0 flex flex-col items-center gap-0.5 mt-0.5">
             <div className="relative w-12 h-12">
               <svg
                 className="absolute inset-0 w-12 h-12 -rotate-90"
                 viewBox="0 0 48 48"
-                style={{ filter: 'drop-shadow(0 0 5px rgba(139,92,246,0.5))' }}
+                style={{ filter: isPaused ? 'drop-shadow(0 0 5px rgba(245,158,11,0.5))' : 'drop-shadow(0 0 5px rgba(139,92,246,0.5))' }}
               >
-                <circle cx="24" cy="24" r="21" fill="none" strokeWidth="4" stroke="rgba(139,92,246,0.15)" />
+                <circle cx="24" cy="24" r="21" fill="none" strokeWidth="4" stroke={isPaused ? 'rgba(245,158,11,0.15)' : 'rgba(139,92,246,0.15)'} />
                 <circle
-                  cx="24" cy="24" r="21" fill="none" strokeWidth="4" stroke="url(#ring-grad)"
+                  cx="24" cy="24" r="21" fill="none" strokeWidth="4" stroke={isPaused ? 'url(#ring-grad-paused)' : 'url(#ring-grad)'}
                   strokeDasharray={ringCirc} strokeDashoffset={ringOffset}
                   strokeLinecap="round" style={{ transition: 'stroke-dashoffset 0.7s ease' }}
                 />
@@ -327,6 +336,10 @@ export function SOPCard({ sop }: Props) {
                   <linearGradient id="ring-grad" x1="0%" y1="0%" x2="100%" y2="0%">
                     <stop offset="0%" stopColor="#8b5cf6" />
                     <stop offset="100%" stopColor="#6366f1" />
+                  </linearGradient>
+                  <linearGradient id="ring-grad-paused" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" stopColor="#f59e0b" />
+                    <stop offset="100%" stopColor="#f97316" />
                   </linearGradient>
                 </defs>
               </svg>
@@ -337,8 +350,7 @@ export function SOPCard({ sop }: Props) {
                 <Initials name={displayName} />
               </div>
             </div>
-            {/* Stage step */}
-            <span className="text-[9px] text-violet-600 font-medium text-center leading-tight tabular-nums">
+            <span className={clsx('text-[9px] font-medium text-center leading-tight tabular-nums', isPaused ? 'text-amber-500' : 'text-violet-600')}>
               {pipelinePct}%
             </span>
           </div>
@@ -383,30 +395,74 @@ export function SOPCard({ sop }: Props) {
       {/* ── Processing info row ──────────────────────────────────────────────── */}
       {isPipelineRunning && (
         <div className="px-4 py-2 flex items-center justify-between bg-violet-500/5 border-b border-violet-500/10 shrink-0 gap-2">
-          {/* Stage */}
           <div className="flex items-center gap-1.5 min-w-0">
             <svg className="w-3 h-3 text-violet-500 shrink-0 animate-spin" style={{ animationDuration: '3s' }} fill="none" viewBox="0 0 24 24">
               <path stroke="currentColor" strokeWidth={2} strokeLinecap="round" d="M12 3a9 9 0 100 18A9 9 0 0012 3z" opacity={0.25}/>
               <path stroke="currentColor" strokeWidth={2} strokeLinecap="round" d="M12 3a9 9 0 019 9"/>
             </svg>
-            <span className="text-[11px] text-violet-600 font-semibold shrink-0 tabular-nums">
-              {pipelinePct}%
-            </span>
-            <span className="text-[11px] text-violet-500/70 truncate">
-              {stageLabel}
-            </span>
+            <span className="text-[11px] text-violet-600 font-semibold shrink-0 tabular-nums">{pipelinePct}%</span>
+            <span className="text-[11px] text-violet-500/70 truncate">{stageLabel}</span>
           </div>
-          {/* Timer */}
-          {sop.pipeline_started_at && (
-            <div className="flex items-center gap-1 shrink-0">
-              <svg className="w-3 h-3 text-violet-400/70 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <circle cx="12" cy="12" r="9"/>
-                <path strokeLinecap="round" d="M12 7v5l3 3"/>
-              </svg>
-              <span className="text-[11px] text-violet-400 font-mono tabular-nums">
-                {formatElapsed(elapsed)}
-              </span>
-            </div>
+          <div className="flex items-center gap-2 shrink-0">
+            {sop.pipeline_started_at && (
+              <div className="flex items-center gap-1">
+                <svg className="w-3 h-3 text-violet-400/70 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <circle cx="12" cy="12" r="9"/><path strokeLinecap="round" d="M12 7v5l3 3"/>
+                </svg>
+                <span className="text-[11px] text-violet-400 font-mono tabular-nums">{formatElapsed(elapsed)}</span>
+              </div>
+            )}
+            {canEdit && (
+              <button
+                onClick={e => { e.stopPropagation(); pauseMutation.mutate() }}
+                disabled={pauseMutation.isPending}
+                className="flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded-md bg-amber-500/15 text-amber-600 hover:bg-amber-500/25 active:scale-95 transition-all disabled:opacity-50 shrink-0 border border-amber-500/20"
+              >
+                {pauseMutation.isPending ? (
+                  <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                  </svg>
+                ) : (
+                  <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
+                    <rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/>
+                  </svg>
+                )}
+                {pauseMutation.isPending ? 'Pausing…' : 'Pause'}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Paused state row ─────────────────────────────────────────────────── */}
+      {isPaused && (
+        <div className="px-4 py-2 flex items-center justify-between bg-amber-500/5 border-b border-amber-500/15 shrink-0 gap-2">
+          <div className="flex items-center gap-1.5 min-w-0">
+            <svg className="w-3 h-3 text-amber-500 shrink-0" fill="currentColor" viewBox="0 0 24 24">
+              <rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/>
+            </svg>
+            <span className="text-[11px] text-amber-600 font-semibold shrink-0">Paused</span>
+            <span className="text-[11px] text-amber-500/70 truncate">{stageLabel}</span>
+          </div>
+          {canEdit && (
+            <button
+              onClick={e => { e.stopPropagation(); resumeMutation.mutate() }}
+              disabled={resumeMutation.isPending}
+              className="flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 bg-amber-500 text-white rounded-md hover:bg-amber-400 active:scale-95 transition-all disabled:opacity-60 shrink-0"
+            >
+              {resumeMutation.isPending ? (
+                <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                </svg>
+              ) : (
+                <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M5 3l14 9-14 9V3z"/>
+                </svg>
+              )}
+              {resumeMutation.isPending ? 'Resuming…' : 'Resume'}
+            </button>
           )}
         </div>
       )}
@@ -517,11 +573,16 @@ export function SOPCard({ sop }: Props) {
         )}
 
         {sop.pipeline_status === 'failed' && (
-          <div className="mb-3 flex items-center gap-2 text-xs text-red-500 font-medium bg-red-500/5 border border-red-500/20 rounded-lg px-3 py-2">
-            <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <div className="mb-3 flex items-start gap-2 bg-red-500/5 border border-red-500/20 rounded-lg px-3 py-2">
+            <svg className="w-3.5 h-3.5 text-red-500 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
             </svg>
-            Pipeline failed — please re-process
+            <div className="min-w-0">
+              <p className="text-xs text-red-500 font-medium">Pipeline failed</p>
+              {sop.pipeline_error && (
+                <p className="text-[11px] text-red-400/80 mt-0.5 line-clamp-2 break-words">{sop.pipeline_error}</p>
+              )}
+            </div>
           </div>
         )}
 
@@ -584,8 +645,19 @@ export function SOPCard({ sop }: Props) {
             </>
           ) : (
             <>
-              <span className="text-xs text-muted">Delete this SOP?</span>
-              <div className="flex items-center gap-1.5">
+              <div className="min-w-0">
+                {(isPipelineRunning || isPaused) ? (
+                  <div className="flex items-center gap-1.5">
+                    <svg className="w-3.5 h-3.5 text-amber-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+                    </svg>
+                    <span className="text-xs text-amber-600 font-medium">Pipeline is running — delete will stop it</span>
+                  </div>
+                ) : (
+                  <span className="text-xs text-muted">Delete this SOP?</span>
+                )}
+              </div>
+              <div className="flex items-center gap-1.5 shrink-0">
                 <button
                   onClick={e => { e.stopPropagation(); setConfirming(false) }}
                   className="text-xs px-2.5 py-1.5 border border-default rounded-lg text-muted hover:bg-raised transition-colors"
@@ -595,7 +667,7 @@ export function SOPCard({ sop }: Props) {
                   disabled={deleteMutation.isPending}
                   className="text-xs px-2.5 py-1.5 bg-red-500 text-white rounded-lg hover:bg-red-600 active:scale-95 transition-all font-medium disabled:opacity-60"
                 >
-                  {deleteMutation.isPending ? 'Deleting…' : 'Delete'}
+                  {deleteMutation.isPending ? 'Deleting…' : (isPipelineRunning || isPaused) ? 'Stop & Delete' : 'Delete'}
                 </button>
               </div>
             </>

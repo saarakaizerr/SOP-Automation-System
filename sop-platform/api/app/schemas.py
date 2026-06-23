@@ -233,6 +233,7 @@ class SOPListItem(BaseModel):
     pipeline_status: Optional[str] = None   # latest pipeline_runs.status
     pipeline_stage: Optional[str] = None    # latest pipeline_runs.current_stage
     pipeline_started_at: Optional[datetime] = None  # latest pipeline_runs.started_at
+    pipeline_error: Optional[str] = None    # latest pipeline_runs.error_message
     tags: list[dict] = []  # [{name: str, color: str}]
     project_code: Optional[str] = None
     is_merged: bool = False

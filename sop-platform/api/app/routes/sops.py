@@ -63,6 +63,14 @@ async def list_sops(
         .correlate(SOP)
         .scalar_subquery()
     )
+    latest_run_error_subq = (
+        select(PipelineRun.error_message)
+        .where(PipelineRun.sop_id == SOP.id)
+        .order_by(PipelineRun.started_at.desc())
+        .limit(1)
+        .correlate(SOP)
+        .scalar_subquery()
+    )
 
     stmt = select(
         SOP,
@@ -70,6 +78,7 @@ async def list_sops(
         latest_run_status_subq.label("pipeline_status"),
         latest_run_stage_subq.label("pipeline_stage"),
         latest_run_started_at_subq.label("pipeline_started_at"),
+        latest_run_error_subq.label("pipeline_error"),
     ).order_by(SOP.created_at.desc())
 
     # Role-based visibility filter (applied before any explicit status query param)
@@ -109,6 +118,7 @@ async def list_sops(
             pipeline_status=str(row[2].value) if row[2] is not None else None,
             pipeline_stage=row[3],
             pipeline_started_at=row[4],
+            pipeline_error=row[5],
             tags=row[0].tags or [],
             project_code=row[0].project_code,
             is_merged=row[0].is_merged,
@@ -586,6 +596,21 @@ async def delete_sop(
     if sop is None:
         raise HTTPException(status_code=404, detail=f"SOP {sop_id} not found")
 
+    # Mark any active pipeline run as failed so n8n polling workflows stop picking it up
+    active_run = (await db.execute(
+        select(PipelineRun)
+        .where(
+            PipelineRun.sop_id == sop_id,
+            PipelineRun.status.notin_([PipelineStatus.completed, PipelineStatus.failed])
+        )
+        .order_by(PipelineRun.started_at.desc())
+        .limit(1)
+    )).scalar_one_or_none()
+    if active_run:
+        active_run.status = PipelineStatus.failed
+        active_run.error_message = "Cancelled: SOP deleted by user"
+        await db.commit()
+
     # Delete merge sessions (no CASCADE on those FKs — must go before the SOP row)
     await db.execute(
         delete(SOPMergeSession).where(
@@ -714,6 +739,105 @@ async def start_pipeline(
             run.status = PipelineStatus.awaiting_approval
         await db.commit()
         raise HTTPException(status_code=502, detail=f"Failed to trigger WF0 webhook: {exc}")
+
+    return {"ok": True}
+
+
+@router.post("/sops/{sop_id}/pause-pipeline")
+async def pause_pipeline(
+    sop_id: UUID,
+    current_user: Annotated[User, Depends(require_editor)],
+    db: AsyncSession = Depends(get_db),
+):
+    """Pause an in-progress pipeline run. Stores the pre-pause status in current_stage for resume."""
+    run = (await db.execute(
+        select(PipelineRun)
+        .where(
+            PipelineRun.sop_id == sop_id,
+            PipelineRun.status.notin_([
+                PipelineStatus.completed, PipelineStatus.failed,
+                PipelineStatus.paused, PipelineStatus.awaiting_approval,
+            ])
+        )
+        .order_by(PipelineRun.started_at.desc())
+        .limit(1)
+    )).scalar_one_or_none()
+
+    if run is None:
+        raise HTTPException(status_code=404, detail="No active pipeline run found")
+
+    # Save current status in current_stage so resume knows where to restart
+    run.current_stage = run.status.value
+    run.status = PipelineStatus.paused
+    await db.commit()
+    return {"ok": True}
+
+
+# Maps a pre-pause status to (status_to_restore, webhook_setting_key)
+# None webhook = polling workflow picks it up automatically
+_RESUME_MAP: dict[str, tuple[str, str | None]] = {
+    "queued":                 ("queued",                   "n8n_wf0_webhook_url"),
+    "transcribing":           ("queued",                   "n8n_wf0_webhook_url"),
+    "detecting_screenshare":  ("queued",                   "n8n_wf0_webhook_url"),
+    "extracting_frames":      ("detecting_screenshare",    "n8n_wf_detect_webhook_url"),
+    "deduplicating":          ("detecting_screenshare",    "n8n_wf_detect_webhook_url"),
+    "classifying_frames":     ("detecting_screenshare",    "n8n_wf_detect_webhook_url"),
+    "generating_annotations": ("generating_annotations",   None),
+    "extracting_clips":       ("extracting_clips",         None),
+    "generating_sections":    ("generating_sections",      None),
+    "processing_sections":    ("generating_sections",      None),
+}
+
+
+@router.post("/sops/{sop_id}/resume-pipeline")
+async def resume_pipeline(
+    sop_id: UUID,
+    current_user: Annotated[User, Depends(require_editor)],
+    db: AsyncSession = Depends(get_db),
+):
+    """Resume a paused pipeline run from the stage it was paused at."""
+    sop = (await db.execute(select(SOP).where(SOP.id == sop_id))).scalar_one_or_none()
+    if sop is None:
+        raise HTTPException(status_code=404, detail=f"SOP {sop_id} not found")
+
+    run = (await db.execute(
+        select(PipelineRun)
+        .where(PipelineRun.sop_id == sop_id, PipelineRun.status == PipelineStatus.paused)
+        .order_by(PipelineRun.started_at.desc())
+        .limit(1)
+    )).scalar_one_or_none()
+
+    if run is None:
+        raise HTTPException(status_code=404, detail="No paused pipeline run found")
+
+    paused_at = run.current_stage or "queued"
+    resume_status_str, webhook_key = _RESUME_MAP.get(paused_at, ("queued", "n8n_wf0_webhook_url"))
+    resume_status = PipelineStatus(resume_status_str)
+
+    run.status = resume_status
+    run.current_stage = paused_at  # keep for context; workflows will overwrite
+    await db.commit()
+
+    if webhook_key is None:
+        # Polling workflow will pick it up automatically
+        return {"ok": True}
+
+    webhook_url = getattr(settings, webhook_key, "")
+    if not webhook_url:
+        return {"ok": True, "warning": f"{webhook_key} not configured — pipeline queued but not triggered"}
+
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.post(
+                webhook_url,
+                json={"sop_id": str(sop_id), "video_url": sop.video_url},
+                headers={"x-internal-key": settings.internal_api_key},
+            )
+            resp.raise_for_status()
+    except Exception as exc:
+        run.status = PipelineStatus.paused
+        await db.commit()
+        raise HTTPException(status_code=502, detail=f"Failed to trigger webhook: {exc}")
 
     return {"ok": True}
 

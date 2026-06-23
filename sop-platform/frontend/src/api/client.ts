@@ -138,6 +138,10 @@ export const renameSOP = (id: string, title: string) =>
 
 export const startPipeline = (id: string) =>
   mutateAPI<{ ok: boolean }>(`/api/sops/${id}/start-pipeline`, 'POST')
+export const pausePipeline = (id: string) =>
+  mutateAPI<{ ok: boolean }>(`/api/sops/${id}/pause-pipeline`, 'POST')
+export const resumePipeline = (id: string) =>
+  mutateAPI<{ ok: boolean }>(`/api/sops/${id}/resume-pipeline`, 'POST')
 export const updateSOPTags = (id: string, tags: SOPTag[]) =>
   mutateAPI<SOPListItem>(`/api/sops/${id}/tags`, 'PATCH', { tags })
 
