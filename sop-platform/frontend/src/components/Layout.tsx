@@ -405,7 +405,7 @@ export function Layout() {
                 alt="CloudNavision"
                 className="h-8 w-auto rounded-lg group-hover:scale-105 transition-transform duration-200"
               />
-              <span className="text-sm font-bold text-default tracking-tight group-hover:text-violet-400 transition-colors duration-200">SOP Platform</span>
+              <span className="text-sm font-bold text-default tracking-tight group-hover:text-violet-400 transition-colors duration-200">Video Document Intelligence Platform</span>
             </Link>
 
             {isAuthenticated && appUser ? (
