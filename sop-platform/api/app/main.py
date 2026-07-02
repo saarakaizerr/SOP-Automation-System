@@ -9,7 +9,6 @@ Infrastructure: Supabase (PostgreSQL via transaction pooler, port 6543)
 """
 
 import asyncio
-import uuid
 from typing import Any
 
 import httpx
