@@ -22,6 +22,8 @@ from app.config import settings
 from app.database import AsyncSessionLocal
 from app.dependencies.pipeline_auth import require_internal_key
 from app.routes import sops, steps, sections, auth, users, exports, merge
+from app.extractor_job_store import create_job, get_job
+from app.azure_job_client import start_extractor_job
 
 app = FastAPI(
     title="SOP Platform API",
@@ -131,8 +133,9 @@ class _ExtractRequest(BaseModel):
     frame_offset_sec: float = 1.5
 
 
-# ── Async job store + GC guard ────────────────────────────────
-_jobs: dict[str, dict[str, Any]] = {}
+# ── Local-dev fallback: GC-safe in-memory task runner ────────
+# Used only when AZURE_CLIENT_ID is not set (no Azure credentials).
+# In production the Container App Job handles execution instead.
 _running_tasks: set = set()
 
 
@@ -142,7 +145,8 @@ def _spawn(coro) -> None:
     task.add_done_callback(_running_tasks.discard)
 
 
-async def _run_extraction_job(job_id: str, body: _ExtractRequest) -> None:
+async def _run_extraction_local(job_id: str, body: _ExtractRequest) -> None:
+    """Local dev: proxy directly to sop-extractor HTTP service."""
     try:
         async with httpx.AsyncClient(timeout=600.0) as client:
             response = await client.post(
@@ -150,34 +154,45 @@ async def _run_extraction_job(job_id: str, body: _ExtractRequest) -> None:
                 json=body.model_dump(),
             )
             response.raise_for_status()
-            _jobs[job_id] = {"status": "completed", "result": response.json(), "error": None}
+            result = response.json()
+        async with AsyncSessionLocal() as session:
+            from sqlalchemy import text as sa_text
+            await session.execute(
+                sa_text("UPDATE extractor_jobs SET status='completed', result=:r, completed_at=NOW() WHERE id=:id"),
+                {"r": __import__("json").dumps(result), "id": job_id},
+            )
+            await session.commit()
     except Exception as exc:
-        _jobs[job_id] = {"status": "failed", "result": None, "error": str(exc)}
+        async with AsyncSessionLocal() as session:
+            from sqlalchemy import text as sa_text
+            await session.execute(
+                sa_text("UPDATE extractor_jobs SET status='failed', error_message=:e, completed_at=NOW() WHERE id=:id"),
+                {"e": str(exc), "id": job_id},
+            )
+            await session.commit()
 
 
 @app.post("/api/extract", tags=["pipeline"], dependencies=[Depends(require_internal_key)])
 async def proxy_extract(body: _ExtractRequest) -> Any:
     """
-    Async proxy POST /api/extract → sop-extractor:8001/extract
-    Returns immediately with job_id. Poll GET /api/extract/status/{job_id} for result.
-    n8n calls this endpoint externally via Cloudflare tunnel.
+    Enqueue extraction task → start Container App Job (prod) or local extractor (dev).
+    Returns job_id immediately. Poll GET /api/extract/status/{job_id} for result.
     """
-    job_id = str(uuid.uuid4())
-    _jobs[job_id] = {"status": "processing", "result": None, "error": None}
-    _spawn(_run_extraction_job(job_id, body))
+    job_id = await create_job("extract", body.model_dump())
+    if settings.azure_subscription_id:
+        await start_extractor_job(job_id)
+    else:
+        _spawn(_run_extraction_local(job_id, body))
     return {"job_id": job_id, "status": "processing"}
 
 
 @app.get("/api/extract/status/{job_id}", tags=["pipeline"], dependencies=[Depends(require_internal_key)])
 async def get_extraction_status(job_id: str) -> Any:
-    """
-    Poll extraction job status.
-    Returns: {job_id, status: processing|completed|failed, result, error}
-    """
-    job = _jobs.get(job_id)
+    """Poll extraction job status from extractor_jobs table."""
+    job = await get_job(job_id)
     if not job:
         raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
-    return {"job_id": job_id, **job}
+    return {"job_id": job_id, "status": job["status"], "result": job["result"], "error": job["error_message"]}
 
 
 class _ClipDefinition(BaseModel):
@@ -196,42 +211,48 @@ class _ClipRequest(BaseModel):
     azure_container: str
 
 
-async def _run_clip_job(job_id: str, body: _ClipRequest) -> None:
+async def _run_clip_local(job_id: str, body: _ClipRequest) -> None:
+    """Local dev: proxy directly to sop-extractor HTTP service."""
     try:
         async with httpx.AsyncClient(timeout=1800.0) as client:
-            response = await client.post(
-                f"{settings.extractor_url}/clip",
-                json=body.model_dump(),
-            )
+            response = await client.post(f"{settings.extractor_url}/clip", json=body.model_dump())
             response.raise_for_status()
-            _jobs[job_id] = {"status": "completed", "result": response.json(), "error": None}
+            result = response.json()
+        async with AsyncSessionLocal() as session:
+            from sqlalchemy import text as sa_text
+            await session.execute(
+                sa_text("UPDATE extractor_jobs SET status='completed', result=:r, completed_at=NOW() WHERE id=:id"),
+                {"r": __import__("json").dumps(result), "id": job_id},
+            )
+            await session.commit()
     except Exception as exc:
-        _jobs[job_id] = {"status": "failed", "result": None, "error": str(exc)}
+        async with AsyncSessionLocal() as session:
+            from sqlalchemy import text as sa_text
+            await session.execute(
+                sa_text("UPDATE extractor_jobs SET status='failed', error_message=:e, completed_at=NOW() WHERE id=:id"),
+                {"e": str(exc), "id": job_id},
+            )
+            await session.commit()
 
 
 @app.post("/api/clip", tags=["pipeline"], dependencies=[Depends(require_internal_key)])
 async def proxy_clip(body: _ClipRequest) -> Any:
-    """
-    Async proxy POST /api/clip → sop-extractor:8001/clip
-    Returns immediately with job_id. Poll GET /api/clip/status/{job_id} for result.
-    n8n calls this endpoint externally via Cloudflare tunnel.
-    """
-    job_id = str(uuid.uuid4())
-    _jobs[job_id] = {"status": "processing", "result": None, "error": None}
-    _spawn(_run_clip_job(job_id, body))
+    """Enqueue clip task → start Container App Job (prod) or local extractor (dev)."""
+    job_id = await create_job("clip", body.model_dump())
+    if settings.azure_subscription_id:
+        await start_extractor_job(job_id)
+    else:
+        _spawn(_run_clip_local(job_id, body))
     return {"job_id": job_id, "status": "processing"}
 
 
 @app.get("/api/clip/status/{job_id}", tags=["pipeline"], dependencies=[Depends(require_internal_key)])
 async def get_clip_status(job_id: str) -> Any:
-    """
-    Poll clip job status.
-    Returns: {job_id, status: processing|completed|failed, result, error}
-    """
-    job = _jobs.get(job_id)
+    """Poll clip job status from extractor_jobs table."""
+    job = await get_job(job_id)
     if not job:
         raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
-    return {"job_id": job_id, **job}
+    return {"job_id": job_id, "status": job["status"], "result": job["result"], "error": job["error_message"]}
 
 
 # ── /api/probe-video proxy ────────────────────────────────────
@@ -243,35 +264,48 @@ class _ProbeVideoRequest(BaseModel):
     azure_container: str
 
 
-async def _run_probe_job(job_id: str, body: _ProbeVideoRequest) -> None:
+async def _run_probe_local(job_id: str, body: _ProbeVideoRequest) -> None:
+    """Local dev: proxy directly to sop-extractor HTTP service."""
     try:
         async with httpx.AsyncClient(timeout=120.0) as client:
-            response = await client.post(
-                f"{settings.extractor_url}/api/probe-video",
-                json=body.model_dump(),
-            )
+            response = await client.post(f"{settings.extractor_url}/api/probe-video", json=body.model_dump())
             response.raise_for_status()
-            _jobs[job_id] = {"status": "completed", "result": response.json(), "error": None}
+            result = response.json()
+        async with AsyncSessionLocal() as session:
+            from sqlalchemy import text as sa_text
+            await session.execute(
+                sa_text("UPDATE extractor_jobs SET status='completed', result=:r, completed_at=NOW() WHERE id=:id"),
+                {"r": __import__("json").dumps(result), "id": job_id},
+            )
+            await session.commit()
     except Exception as exc:
-        _jobs[job_id] = {"status": "failed", "result": None, "error": str(exc)}
+        async with AsyncSessionLocal() as session:
+            from sqlalchemy import text as sa_text
+            await session.execute(
+                sa_text("UPDATE extractor_jobs SET status='failed', error_message=:e, completed_at=NOW() WHERE id=:id"),
+                {"e": str(exc), "id": job_id},
+            )
+            await session.commit()
 
 
 @app.post("/api/probe-video", tags=["pipeline"], dependencies=[Depends(require_internal_key)])
 async def proxy_probe_video(body: _ProbeVideoRequest) -> Any:
-    """Async proxy POST /api/probe-video → sop-extractor:8001/api/probe-video. Returns job_id immediately."""
-    job_id = str(uuid.uuid4())
-    _jobs[job_id] = {"status": "processing", "result": None, "error": None}
-    _spawn(_run_probe_job(job_id, body))
+    """Enqueue probe-video task → start Container App Job (prod) or local extractor (dev)."""
+    job_id = await create_job("probe", body.model_dump())
+    if settings.azure_subscription_id:
+        await start_extractor_job(job_id)
+    else:
+        _spawn(_run_probe_local(job_id, body))
     return {"job_id": job_id, "status": "processing"}
 
 
 @app.get("/api/probe-video/status/{job_id}", tags=["pipeline"], dependencies=[Depends(require_internal_key)])
 async def get_probe_status(job_id: str) -> Any:
-    """Poll probe-video job status. Returns {job_id, status: processing|completed|failed, result, error}"""
-    job = _jobs.get(job_id)
+    """Poll probe-video job status from extractor_jobs table."""
+    job = await get_job(job_id)
     if not job:
         raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
-    return {"job_id": job_id, **job}
+    return {"job_id": job_id, "status": job["status"], "result": job["result"], "error": job["error_message"]}
 
 
 # ── /api/split-video proxy ────────────────────────────────────
@@ -286,56 +320,62 @@ class _SplitVideoRequest(BaseModel):
     search_window_sec: float = 300.0
 
 
-async def _run_split_job(job_id: str, body: _SplitVideoRequest) -> None:
+async def _run_split_local(job_id: str, body: _SplitVideoRequest) -> None:
+    """Local dev: proxy directly to sop-extractor HTTP service (with inner polling)."""
     try:
         async with httpx.AsyncClient(timeout=3600.0) as client:
-            # Submit to extractor (returns 202 + extractor_job_id immediately)
-            response = await client.post(
-                f"{settings.extractor_url}/api/split-video",
-                json=body.model_dump(),
-            )
+            response = await client.post(f"{settings.extractor_url}/api/split-video", json=body.model_dump())
             response.raise_for_status()
             extractor_job_id = response.json()["job_id"]
-
-            # Poll extractor until split finishes (up to ~60 min)
             for _ in range(120):
                 await asyncio.sleep(30)
                 try:
-                    st = await client.get(
-                        f"{settings.extractor_url}/api/split-video/status/{extractor_job_id}",
-                        timeout=15.0,
-                    )
+                    st = await client.get(f"{settings.extractor_url}/api/split-video/status/{extractor_job_id}", timeout=15.0)
                     data = st.json()
                 except Exception:
                     continue
                 if data.get("status") == "done":
-                    _jobs[job_id] = {"status": "done", "result": data["result"], "error": None}
-                    return
+                    result = data["result"]
+                    break
                 if data.get("status") == "failed":
-                    _jobs[job_id] = {"status": "failed", "result": None, "error": data.get("error", "extractor failed")}
-                    return
-
-            _jobs[job_id] = {"status": "failed", "result": None, "error": "timed out waiting for extractor"}
+                    raise RuntimeError(data.get("error", "extractor split failed"))
+            else:
+                raise RuntimeError("timed out waiting for extractor split")
+        async with AsyncSessionLocal() as session:
+            from sqlalchemy import text as sa_text
+            await session.execute(
+                sa_text("UPDATE extractor_jobs SET status='done', result=:r, completed_at=NOW() WHERE id=:id"),
+                {"r": __import__("json").dumps(result), "id": job_id},
+            )
+            await session.commit()
     except Exception as exc:
-        _jobs[job_id] = {"status": "failed", "result": None, "error": str(exc)}
+        async with AsyncSessionLocal() as session:
+            from sqlalchemy import text as sa_text
+            await session.execute(
+                sa_text("UPDATE extractor_jobs SET status='failed', error_message=:e, completed_at=NOW() WHERE id=:id"),
+                {"e": str(exc), "id": job_id},
+            )
+            await session.commit()
 
 
 @app.post("/api/split-video", tags=["pipeline"], dependencies=[Depends(require_internal_key)])
 async def proxy_split_video(body: _SplitVideoRequest) -> Any:
-    """Async proxy POST /api/split-video → sop-extractor:8001/api/split-video. Returns job_id immediately."""
-    job_id = str(uuid.uuid4())
-    _jobs[job_id] = {"status": "processing", "result": None, "error": None}
-    _spawn(_run_split_job(job_id, body))
+    """Enqueue split-video task → start Container App Job (prod) or local extractor (dev)."""
+    job_id = await create_job("split", body.model_dump())
+    if settings.azure_subscription_id:
+        await start_extractor_job(job_id)
+    else:
+        _spawn(_run_split_local(job_id, body))
     return {"job_id": job_id, "status": "processing"}
 
 
 @app.get("/api/split-video/status/{job_id}", tags=["pipeline"], dependencies=[Depends(require_internal_key)])
 async def get_split_status(job_id: str) -> Any:
-    """Poll split job status. Returns {job_id, status, result: {part1_url, part2_url, ...}, error}"""
-    job = _jobs.get(job_id)
+    """Poll split job status from extractor_jobs table."""
+    job = await get_job(job_id)
     if not job:
         raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
-    return {"job_id": job_id, **job}
+    return {"job_id": job_id, "status": job["status"], "result": job["result"], "error": job["error_message"]}
 
 
 class _SeedRequest(BaseModel):
@@ -345,8 +385,15 @@ class _SeedRequest(BaseModel):
 
 @app.post("/api/split-video/seed", tags=["pipeline"], dependencies=[Depends(require_internal_key)])
 async def seed_split_result(body: _SeedRequest) -> Any:
-    """Recovery: inject a known split result into _jobs so a polling workflow can continue."""
-    _jobs[body.job_id] = {"status": "done", "result": body.result, "error": None}
+    """Recovery: inject a known split result into extractor_jobs so a polling workflow can continue."""
+    async with AsyncSessionLocal() as session:
+        from sqlalchemy import text as sa_text
+        import json as _json
+        await session.execute(
+            sa_text("UPDATE extractor_jobs SET status='done', result=:r WHERE id=:id"),
+            {"r": _json.dumps(body.result), "id": body.job_id},
+        )
+        await session.commit()
     return {"ok": True, "job_id": body.job_id}
 
 

@@ -129,15 +129,6 @@ jobs:
               "N8N_WF0_WEBHOOK_URL=${{ secrets.N8N_WF0_WEBHOOK_URL }}" \
               "AZURE_BLOB_SAS_TOKEN=${{ secrets.AZURE_BLOB_SAS_TOKEN }}"
 
-      - name: Deploy sop-extractor
-        run: |
-          az containerapp update \
-            --name sop-extractor \
-            --resource-group ${{ env.RESOURCE_GROUP }} \
-            --container-name sop-extractor \
-            --image ${{ env.ACR_LOGIN_SERVER }}/sop-extractor:${{ needs.build-push.outputs.image-tag }} \
-            --cpu 4 --memory 8Gi
-
       - name: Verify sop-api revision is healthy
         run: |
           REVISION=$(az containerapp revision list \

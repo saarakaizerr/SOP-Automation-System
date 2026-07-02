@@ -30,10 +30,18 @@ class Settings(BaseSettings):
     # Supabase auth — URL used to derive JWKS endpoint
     supabase_url: str = ""
     supabase_jwt_secret: str = ""
+    # Supabase service key (for extractor job store writes)
+    supabase_service_key: str = ""
     # Pipeline security — shared secret between n8n and this API
     # n8n sends header: x-internal-key: <this value>
     # Generate: python -c "import secrets; print(secrets.token_hex(32))"
     internal_api_key: str = ""
+    # Azure Container App Job — sop-extractor-job trigger
+    # Set AZURE_SUBSCRIPTION_ID in Azure to enable Container App Job mode.
+    # Leave empty for local dev (falls back to direct HTTP extractor).
+    azure_subscription_id: str = ""
+    azure_resource_group: str = "rg-saara-workspace"
+    azure_extractor_job_name: str = "sop-extractor-job"
 
     class Config:
         env_file = ".env"
