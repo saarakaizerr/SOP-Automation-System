@@ -11,6 +11,8 @@ from app.dependencies.auth import require_viewer, require_editor
 from app.models import SOP, SOPStep, StepCallout, User, SOPActivityLog
 from app.schemas import StepSchema, CalloutPatchItem, CalloutSchema, RenderAnnotatedResponse, with_sas, NewCalloutItem, HighlightBoxItem, CreateStepBody
 from app.config import settings
+from app.extractor_job_store import create_job, get_job
+from app.azure_job_client import start_extractor_job
 
 router = APIRouter(prefix="/api", tags=["steps"])
 
@@ -414,9 +416,7 @@ async def render_annotated(
     current_user: Annotated[User, Depends(require_editor)],
     db: AsyncSession = Depends(get_db),
 ):
-    """Proxy to sop-extractor: re-render annotated screenshot PNG after callout edits."""
-    import httpx
-
+    """Re-render annotated screenshot PNG via Container App Job after callout edits."""
     stmt = (
         select(SOPStep)
         .where(SOPStep.id == step_id)
@@ -456,13 +456,22 @@ async def render_annotated(
         "azure_sas_token": settings.azure_blob_sas_token,
     }
 
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        resp = await client.post(f"{settings.extractor_url}/api/render-annotated", json=payload)
-    if resp.status_code != 200:
-        raise HTTPException(status_code=502, detail=f"Extractor error: {resp.text}")
+    import asyncio
+    job_id = await create_job("render_doc", payload)
+    await start_extractor_job(job_id)
 
-    result = resp.json()
-    annotated_url = result["annotated_screenshot_url"]
+    # Poll until the Container App Job completes (up to 120 seconds)
+    for _ in range(60):
+        await asyncio.sleep(2)
+        job = await get_job(job_id)
+        if job.get("status") == "completed":
+            break
+        if job.get("status") == "failed":
+            raise HTTPException(status_code=502, detail=f"Extractor error: {job.get('error_message')}")
+    else:
+        raise HTTPException(status_code=504, detail="render-annotated timed out")
+
+    annotated_url = job["result"]["annotated_screenshot_url"]
 
     # Persist the new URL and bump updated_at for cache-busting
     from datetime import datetime, timezone
