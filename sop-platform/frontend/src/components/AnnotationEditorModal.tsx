@@ -277,12 +277,23 @@ export function AnnotationEditorModal({
         color: b.color,
       })))
 
-      // 4. Re-render annotated PNG automatically
-      const res = await renderAnnotated(stepId)
-      setRerenderUrl(res.annotated_screenshot_url)
-
       await qc.invalidateQueries({ queryKey: sopKeys.detail(sopId) })
       onClose()
+
+      // Re-render annotated PNG in background — don't block modal close
+      renderAnnotated(stepId)
+        .then(res => {
+          setRerenderUrl(res.annotated_screenshot_url)
+          qc.setQueryData<any>(sopKeys.detail(sopId), (old: any) =>
+            old ? {
+              ...old,
+              steps: old.steps.map((s: any) =>
+                s.id === stepId ? { ...s, annotated_screenshot_url: res.annotated_screenshot_url } : s
+              ),
+            } : old
+          )
+        })
+        .catch(() => {})
     } catch (err) {
       alert(`Save failed: ${err instanceof Error ? err.message : String(err)}`)
     } finally {
