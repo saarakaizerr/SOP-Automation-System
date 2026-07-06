@@ -457,10 +457,19 @@ async def render_annotated(
     }
 
     import asyncio
-    job_id = await create_job("render_doc", payload)
+    from datetime import datetime, timezone
+    from app.database import AsyncSessionLocal
+
+    job_id = await create_job("render_annotated", payload)
+
+    # Release the held DB connection before the long polling loop to avoid
+    # exhausting the Supabase session-mode pool when many steps auto-render.
+    await db.close()
+
     await start_extractor_job(job_id)
 
     # Poll until the Container App Job completes (up to 120 seconds)
+    job: dict = {}
     for _ in range(60):
         await asyncio.sleep(2)
         job = await get_job(job_id)
@@ -473,10 +482,14 @@ async def render_annotated(
 
     annotated_url = job["result"]["annotated_screenshot_url"]
 
-    # Persist the new URL and bump updated_at for cache-busting
-    from datetime import datetime, timezone
-    step.annotated_screenshot_url = annotated_url
-    step.updated_at = datetime.now(timezone.utc)
-    await db.commit()
+    # Re-acquire DB connection only for the final save
+    async with AsyncSessionLocal() as save_db:
+        save_step = (await save_db.execute(
+            select(SOPStep).where(SOPStep.id == step_id)
+        )).scalar_one_or_none()
+        if save_step:
+            save_step.annotated_screenshot_url = annotated_url
+            save_step.updated_at = datetime.now(timezone.utc)
+            await save_db.commit()
 
     return RenderAnnotatedResponse(annotated_screenshot_url=with_sas(annotated_url) or annotated_url)

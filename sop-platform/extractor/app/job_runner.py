@@ -112,6 +112,10 @@ async def main() -> None:
             from app.handlers.probe import run_probe
             result = await asyncio.to_thread(run_probe, **params)
 
+        elif task_type == "render_annotated":
+            from app.handlers.render_annotated import run_render_annotated
+            result = await asyncio.to_thread(run_render_annotated, **params)
+
         elif task_type == "render_doc":
             from app.handlers.render_doc import run_render_doc
             result = await asyncio.to_thread(run_render_doc, **params)
