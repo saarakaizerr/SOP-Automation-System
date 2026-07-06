@@ -14,6 +14,7 @@ Plus all standard extractor env vars (AZURE_*, GEMINI_API_KEY, etc.)
 import asyncio
 import os
 import sys
+from datetime import datetime, timedelta, timezone
 
 import httpx
 
@@ -27,14 +28,38 @@ _HEADERS = {
     "Prefer": "return=representation",
 }
 
+# Fast tasks: expected to complete in <60s. Stale queued ones block newer requests.
+_FAST_TASK_TYPES = ("render_annotated", "render_doc", "probe")
+_STALE_MINUTES = 5
 
-async def _claim_task() -> dict | None:
+
+async def _expire_stale_fast_tasks(client: httpx.AsyncClient) -> None:
+    """Mark queued fast tasks older than 5 minutes as failed so they don't block fresh requests."""
+    cutoff = (datetime.now(timezone.utc) - timedelta(minutes=_STALE_MINUTES)).isoformat()
+    for task_type in _FAST_TASK_TYPES:
+        try:
+            resp = await client.patch(
+                f"{SUPABASE_URL}/rest/v1/extractor_jobs",
+                params={"status": "eq.queued", "task_type": f"eq.{task_type}", "created_at": f"lt.{cutoff}"},
+                json={"status": "failed", "error_message": "expired: not processed within 5 minutes"},
+                headers=_HEADERS,
+            )
+            expired = resp.json()
+            if expired:
+                print(f"[job_runner] Expired {len(expired)} stale {task_type} tasks", file=sys.stderr)
+        except Exception as exc:
+            print(f"[job_runner] Warning: could not expire stale tasks: {exc}", file=sys.stderr)
+
+
+async def _claim_task(client: httpx.AsyncClient) -> dict | None:
     """
     Claim the oldest queued extractor_jobs row atomically.
-    Returns the row dict, or None if no queued tasks exist.
+    Retries up to 30 times when another concurrent execution wins the race,
+    so that 25 simultaneous executions each claim a different task rather
+    than 24 of them exiting without processing anything.
+    Returns the claimed row dict, or None if the queue is empty.
     """
-    async with httpx.AsyncClient(timeout=15.0) as client:
-        # Fetch oldest queued row
+    for _ in range(30):
         resp = await client.get(
             f"{SUPABASE_URL}/rest/v1/extractor_jobs",
             params={"status": "eq.queued", "order": "created_at.asc", "limit": "1", "select": "*"},
@@ -43,14 +68,12 @@ async def _claim_task() -> dict | None:
         resp.raise_for_status()
         rows = resp.json()
 
-    if not rows:
-        return None
+        if not rows:
+            return None  # Queue is empty
 
-    row = rows[0]
-    task_id = row["id"]
+        task_id = rows[0]["id"]
 
-    # Mark as running — only succeeds if still queued (concurrent-safe check)
-    async with httpx.AsyncClient(timeout=15.0) as client:
+        # Mark as running only if still queued (concurrent-safe)
         patch = await client.patch(
             f"{SUPABASE_URL}/rest/v1/extractor_jobs",
             params={"id": f"eq.{task_id}", "status": "eq.queued"},
@@ -60,11 +83,14 @@ async def _claim_task() -> dict | None:
         patch.raise_for_status()
         updated = patch.json()
 
-    if not updated:
-        # Another job instance grabbed this task first
-        return None
+        if updated:
+            return updated[0]
 
-    return updated[0]
+        # Race lost — another execution claimed this task. The queue now has
+        # one fewer queued item; retry immediately to claim the next oldest.
+        await asyncio.sleep(0.05)
+
+    return None
 
 
 async def _update(task_id: str, status: str, result: dict = None, error: str = None) -> None:
@@ -84,7 +110,10 @@ async def _update(task_id: str, status: str, result: dict = None, error: str = N
 
 
 async def main() -> None:
-    task = await _claim_task()
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        await _expire_stale_fast_tasks(client)
+        task = await _claim_task(client)
+
     if not task:
         print("[job_runner] No queued tasks found — exiting cleanly", file=sys.stderr)
         sys.exit(0)

@@ -105,12 +105,38 @@ export async function patchCallouts(
   return result
 }
 
-export async function renderAnnotated(stepId: string): Promise<RenderAnnotatedResponse> {
-  const result = await mutateAPI<RenderAnnotatedResponse>(
-    `/api/steps/${stepId}/render-annotated`, 'POST'
-  )
-  if (result === null) throw new Error('Unexpected empty response from POST render-annotated')
-  return result
+// Max 3 concurrent render-annotated jobs — prevents thundering-herd when a page
+// with many steps auto-renders all at once, which causes Container App Job race conditions.
+const _renderQueue: Array<() => void> = []
+let _renderRunning = 0
+const _RENDER_CONCURRENCY = 3
+
+function _drainRenderQueue() {
+  while (_renderRunning < _RENDER_CONCURRENCY && _renderQueue.length > 0) {
+    _renderRunning++
+    const next = _renderQueue.shift()!
+    next()
+  }
+}
+
+export function renderAnnotated(stepId: string): Promise<RenderAnnotatedResponse> {
+  return new Promise((resolve, reject) => {
+    _renderQueue.push(async () => {
+      try {
+        const result = await mutateAPI<RenderAnnotatedResponse>(
+          `/api/steps/${stepId}/render-annotated`, 'POST'
+        )
+        if (result === null) throw new Error('Unexpected empty response from POST render-annotated')
+        resolve(result)
+      } catch (e) {
+        reject(e)
+      } finally {
+        _renderRunning--
+        _drainRenderQueue()
+      }
+    })
+    _drainRenderQueue()
+  })
 }
 
 export const addCallout = (stepId: string, body: { callout_number: number; label: string; target_x: number; target_y: number }) =>
