@@ -53,11 +53,23 @@ def extract_frames(
     seen_hashes: list[imagehash.ImageHash] = []
     global_frame_num = 0
 
+    video_w, video_h = _get_video_dimensions(video_path)
+    logger.info("Video dimensions: %dx%d", video_w, video_h)
+
     for period_idx, period in enumerate(screen_share_periods):
         start_time = float(period["start_time"])
         end_time = float(period["end_time"])
         crop = period["crop"]
         x, y, w, h = int(crop["x"]), int(crop["y"]), int(crop["w"]), int(crop["h"])
+
+        # Clamp crop to actual video bounds (WF1 coords may differ from stored video resolution)
+        x = max(0, min(x, video_w - 2))
+        y = max(0, min(y, video_h - 2))
+        w = max(2, min(w, video_w - x))
+        h = max(2, min(h, video_h - y))
+        # x264 requires even dimensions
+        w = w - (w % 2)
+        h = h - (h % 2)
 
         logger.info(
             "Period %d: %.1fs–%.1fs  crop %dx%d+%d+%d",
@@ -160,6 +172,26 @@ def _ffmpeg_crop_segment(
         raise RuntimeError(
             f"FFmpeg crop failed for period {output_path.name}:\n{result.stderr[-800:]}"
         )
+
+
+def _get_video_dimensions(video_path: Path) -> tuple[int, int]:
+    """Return (width, height) of the first video stream via ffprobe."""
+    result = subprocess.run(
+        [
+            "ffprobe", "-v", "error",
+            "-select_streams", "v:0",
+            "-show_entries", "stream=width,height",
+            "-of", "csv=p=0",
+            str(video_path),
+        ],
+        capture_output=True, text=True, timeout=30,
+    )
+    if result.returncode == 0 and result.stdout.strip():
+        parts = result.stdout.strip().split(",")
+        if len(parts) >= 2:
+            return int(parts[0]), int(parts[1])
+    logger.warning("Could not probe video dimensions, assuming 1920x1080")
+    return 1920, 1080
 
 
 def _extract_single_frame(
