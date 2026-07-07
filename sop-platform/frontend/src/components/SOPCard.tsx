@@ -3,7 +3,7 @@ import { useNavigate } from '@tanstack/react-router'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import clsx from 'clsx'
 import type { SOPListItem, SOPStatus, SOPTag } from '../api/types'
-import { deleteSOP, updateSOPTags, startPipeline, pausePipeline, resumePipeline, sopKeys } from '../api/client'
+import { deleteSOP, updateSOPTags, startPipeline, resumePipeline, sopKeys } from '../api/client'
 import { useAuthContext } from '../contexts/AuthContext'
 
 interface Props { sop: SOPListItem }
@@ -256,10 +256,7 @@ export function SOPCard({ sop }: Props) {
     mutationFn: () => startPipeline(sop.id),
     onSuccess: () => qc.invalidateQueries({ queryKey: sopKeys.all }),
   })
-  const pauseMutation = useMutation({
-    mutationFn: () => pausePipeline(sop.id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: sopKeys.all }),
-  })
+
   const resumeMutation = useMutation({
     mutationFn: () => resumePipeline(sop.id),
     onSuccess: () => qc.invalidateQueries({ queryKey: sopKeys.all }),
