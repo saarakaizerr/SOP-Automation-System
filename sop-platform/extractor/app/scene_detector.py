@@ -87,6 +87,7 @@ def extract_frames(
         scenes = _fill_time_gaps(scenes, segment_duration, fallback_interval_sec)
 
         # Stage 3 + 4 — Extract frame per scene, then dedup
+        period_frames_before = len(all_frames)
         for scene_start_sec, scene_end_sec in scenes:
             # Clamp T+offset so it stays inside the scene window
             target_sec = min(scene_start_sec + frame_offset_sec, scene_end_sec - 0.05)
@@ -137,6 +138,14 @@ def extract_frames(
                 height=height,
             ))
 
+        # Free disk space — segment file is no longer needed after frame extraction
+        try:
+            segment_path.unlink()
+            logger.info("Period %d: deleted segment file, extracted %d frames",
+                        period_idx, len(all_frames) - period_frames_before)
+        except OSError as exc:
+            logger.warning("Could not delete segment file %s: %s", segment_path, exc)
+
     return all_frames
 
 
@@ -167,7 +176,7 @@ def _ffmpeg_crop_segment(
         "-avoid_negative_ts", "make_zero",
         str(output_path),
     ]
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=3600)
     if result.returncode != 0:
         raise RuntimeError(
             f"FFmpeg crop failed for period {output_path.name}:\n{result.stderr[-800:]}"
