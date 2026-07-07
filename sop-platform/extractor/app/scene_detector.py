@@ -117,6 +117,9 @@ def extract_frames(
             phash = imagehash.phash(img)
             img.close()
 
+            # Absolute timestamp = period start + offset within segment
+            absolute_ts = round(start_time + target_sec, 2)
+
             # Stage 4 — perceptual dedup
             is_duplicate = any(
                 abs(phash - existing) <= dedup_hash_threshold
@@ -131,9 +134,6 @@ def extract_frames(
             if not is_duplicate:
                 seen_hashes.append(phash)
                 last_useful_ts = absolute_ts
-
-            # Absolute timestamp = period start + offset within segment
-            absolute_ts = round(start_time + target_sec, 2)
 
             all_frames.append(ExtractedFrame(
                 frame_num=global_frame_num,
