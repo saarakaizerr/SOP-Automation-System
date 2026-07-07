@@ -42,6 +42,7 @@ def extract_frames(
     dedup_hash_threshold: int = 8,
     frame_offset_sec: float = 1.5,
     fallback_interval_sec: float = 120.0,
+    min_useful_gap_sec: float = 4.0,
 ) -> list[ExtractedFrame]:
     """
     Run the full frame extraction pipeline across all screen-share periods.
@@ -52,6 +53,7 @@ def extract_frames(
     all_frames: list[ExtractedFrame] = []
     seen_hashes: list[imagehash.ImageHash] = []
     global_frame_num = 0
+    last_useful_ts: float = -999.0
 
     video_w, video_h = _get_video_dimensions(video_path)
     logger.info("Video dimensions: %dx%d", video_w, video_h)
@@ -120,9 +122,15 @@ def extract_frames(
                 abs(phash - existing) <= dedup_hash_threshold
                 for existing in seen_hashes
             )
+            # Time-based dedup: skip frames too close to the last useful frame
+            # catches typing sequences, loading states, rapid cursor movement
+            if not is_duplicate and (absolute_ts - last_useful_ts) < min_useful_gap_sec:
+                is_duplicate = True
+
             classification = "DUPLICATE" if is_duplicate else "USEFUL"
             if not is_duplicate:
                 seen_hashes.append(phash)
+                last_useful_ts = absolute_ts
 
             # Absolute timestamp = period start + offset within segment
             absolute_ts = round(start_time + target_sec, 2)
