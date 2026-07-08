@@ -15,6 +15,7 @@ export function StepSidebar({ steps, sections, sopId }: Props) {
   const { selectedStepId, setSelectedStep } = useSOPStore()
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<Filter>('all')
+  const visibleSections = sections.filter(s => !s.section_key.startsWith('_'))
 
   const currentIndex = steps.findIndex(s => s.id === selectedStepId)
   const canPrev = currentIndex > 0
@@ -197,7 +198,7 @@ export function StepSidebar({ steps, sections, sopId }: Props) {
       </div>
 
       {/* ── Sections card ── */}
-      {sections.length > 0 && (
+      {visibleSections.length > 0 && (
         <div className="bg-card rounded-xl shadow-sm border border-subtle overflow-hidden">
           <div className="px-4 py-3 border-b border-subtle bg-violet-500/10">
             <div className="flex items-center justify-between">
@@ -210,12 +211,12 @@ export function StepSidebar({ steps, sections, sopId }: Props) {
                 </span>
               </div>
               <span className="text-xs bg-violet-600 text-white font-bold rounded-full px-2 py-0.5">
-                {sections.length}
+                {visibleSections.length}
               </span>
             </div>
           </div>
           <ul className="py-1 overflow-y-auto max-h-[30vh]">
-            {sections.map((sec) => (
+            {visibleSections.map((sec) => (
               <li key={sec.id}>
                 <a
                   href={`/sop/${sopId}/overview#section-${sec.section_key}`}
