@@ -3,11 +3,11 @@ Phase 7a: SOP Export endpoint — async job-based to avoid gateway timeouts.
 POST /api/sops/{sop_id}/export?format=docx|pdf  → 202 { export_id, status }
 GET  /api/exports/{export_id}                   → { status, download_url, ... }
 """
+import asyncio
 import uuid as uuid_module
 from typing import Annotated
 from uuid import UUID
 
-import httpx
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,6 +16,8 @@ from sqlalchemy.orm import selectinload
 from app.config import settings
 from app.database import get_db, AsyncSessionLocal
 from app.dependencies.auth import require_viewer
+from app.extractor_job_store import create_job, get_job
+from app.azure_job_client import start_extractor_job
 from app.models import SOP, SOPStep, ExportHistory, User
 from app.schemas import SOPDetail, with_sas
 
@@ -141,23 +143,29 @@ async def _run_export(export_id: str, sop_id: UUID, fmt: str, user_id: UUID, tem
                 "sop_data": sop_data,
             }
 
-            try:
-                async with httpx.AsyncClient(timeout=600.0) as client:
-                    resp = await client.post(
-                        f"{settings.extractor_url}/api/render-doc",
-                        json=render_payload,
-                    )
-                    resp.raise_for_status()
-            except httpx.TimeoutException:
-                return _fail("Export timed out — extractor took too long")
-            except httpx.HTTPStatusError as exc:
-                detail = exc.response.text[:300] if exc.response else str(exc)
-                return _fail(f"Extractor error: {detail}")
-            except Exception as exc:
-                return _fail(f"Extractor unavailable: {exc}")
+            # Enqueue a render_doc job for the on-demand extractor Container App
+            # Job. The always-on extractor HTTP service was retired in the
+            # cost-saving job migration, so exports now go through extractor_jobs
+            # like every other extractor task (extract / clip / render_annotated).
+            job_id = await create_job("render_doc", render_payload)
+            await start_extractor_job(job_id)
 
-            render_result = resp.json()
-            file_url_base = render_result["pdf_url"] if fmt == "pdf" else render_result["docx_url"]
+            # Poll until the job completes. DOCX+PDF (LibreOffice) can be slow on
+            # a cold job start, so allow up to 5 minutes — matches the render_doc
+            # fast-task expiry window in the job runner.
+            job: dict = {}
+            for _ in range(150):
+                await asyncio.sleep(2)
+                job = await get_job(job_id)
+                if job.get("status") == "completed":
+                    break
+                if job.get("status") == "failed":
+                    return _fail(f"Extractor error: {job.get('error_message')}")
+            else:
+                return _fail("Export timed out — extractor job did not complete")
+
+            render_result = job.get("result") or {}
+            file_url_base = render_result.get("pdf_url") if fmt == "pdf" else render_result.get("docx_url")
             if not file_url_base:
                 return _fail("Extractor returned no file URL")
 
